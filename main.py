@@ -15,7 +15,7 @@ from cort.preprocessing import parse_and_preprocess_sentences
 from transformers import AutoTokenizer, AutoConfig
 from tensorflow.keras.preprocessing import sequence
 from tensorflow.keras import callbacks, optimizers, metrics
-from tensorflow_addons import metrics as metrics_tfa
+from tensorflow_addons import metrics as metrics_tfa, callbacks as callbacks_tfa
 from sklearn.model_selection import StratifiedKFold
 
 
@@ -146,7 +146,7 @@ def set_random_seed(seed):
     os.environ['TF_CUDNN_DETERMINISTIC'] = str(seed)
 
 
-def run_train(config, train_dataset, valid_dataset):
+def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
     model = CortModel(config)
     optimizer = optimizers.Adam(learning_rate=config.learning_rate)
 
@@ -201,8 +201,14 @@ def run_train(config, train_dataset, valid_dataset):
     }
 
     callback = callbacks.CallbackList(callbacks=[
+        callbacks_tfa.TQDMProgressBar(update_per_second=1),
         wandb.keras.WandbCallback()
     ])
+    callback.set_model(model)
+    callback.set_params({
+        'epochs': config.epochs,
+        'steps': steps_per_epoch,
+    })
 
     @tf.function
     def train_step(input_ids, labels):
@@ -241,8 +247,8 @@ def run_train(config, train_dataset, valid_dataset):
             callback.on_test_batch_begin(index, logs=create_metric_logs(metric_maps['valid']))
         return create_metric_logs(metric_maps['valid'])
 
-    current_step = 1
-    for epoch in tqdm(range(config.initial_epoch, config.epochs), desc='Epoch: {}'.format(current_step)):
+    # current_step = 1
+    for epoch in range(config.initial_epoch, config.epochs):
         callback.on_epoch_begin(epoch)
         logs = {}
 
@@ -261,10 +267,6 @@ def run_train(config, train_dataset, valid_dataset):
 
         callback.on_epoch_end(epoch, logs=logs)
 
-        logs_message = ', '.join([key + ': ' + value for key, value in logs])
-        print('ㄴ {}'.format(epoch + 1, logs_message))
-        current_step += 1
-
 
 def main():
     config = parse_arguments()
@@ -282,7 +284,7 @@ def main():
     valid_dataset = tf.data.Dataset.from_tensor_slices(valid_data)
     valid_dataset = valid_dataset.batch(config.batch_size)
 
-    run_train(config, train_dataset, valid_dataset)
+    run_train(config, train_dataset, valid_dataset, steps_per_epoch)
 
 
 if __name__ == '__main__':
