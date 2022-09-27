@@ -1,0 +1,12 @@
+program: main.py
+project: CoRT
+description: K-Fold CV for CoRT
+method: grid
+metric:
+  name: val_total_loss
+  goal: minimize
+parameters:
+  current_fold:
+    values: [0, 1, 2, 3, 4, 5, 6, 7, 9]
+  learning_rate:
+    value: 5e-6

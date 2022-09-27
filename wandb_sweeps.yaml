@@ -1,0 +1,20 @@
+program: main.py
+name: CoRT
+description: Cross-Validation for CoRT
+method: bayes
+metric:
+  name: val_loss
+  goal: minimize
+parameters:
+  current_fold:
+    distribution: int_uniform
+    min: 0
+    max: 9
+  learning_rate:
+    distribution: uniform
+    min: 1e-7
+    max: 1e-3
+  repr_size:
+    distribution: int_uniform
+    min: 128
+    max: 2048
