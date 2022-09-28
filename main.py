@@ -1,3 +1,4 @@
+import copy
 import os
 import wandb
 import random
@@ -14,8 +15,8 @@ from cort.preprocessing import parse_and_preprocess_sentences
 # from pretrained.config import create_bert_config, create_electra_config
 from transformers import AutoTokenizer, AutoConfig
 from tensorflow.keras.preprocessing import sequence
-from tensorflow.keras import callbacks, optimizers, metrics
-from tensorflow_addons import metrics as metrics_tfa, callbacks as callbacks_tfa
+from tensorflow.keras import callbacks, optimizers, metrics, utils
+from tensorflow_addons import metrics as metrics_tfa
 from sklearn.model_selection import StratifiedKFold
 
 
@@ -155,7 +156,7 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
         metric_map['total_loss'] = metrics.Mean(name='total_loss')
         metric_map['contrastive_loss'] = metrics.Mean(name='contrastive_loss')
         metric_map['cross_entropy_loss'] = metrics.Mean(name='cross_entropy_loss')
-        metric_map['accuracy'] = metrics.Accuracy(name='accuracy')
+        metric_map['accuracy'] = metrics.CategoricalAccuracy(name='accuracy')
         metric_map['precision'] = metrics.Precision(name='precision')
         metric_map['recall'] = metrics.Recall(name='recall')
         metric_map['micro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_labels, average='micro')
@@ -201,7 +202,6 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
     }
 
     callback = callbacks.CallbackList(callbacks=[
-        callbacks_tfa.TQDMProgressBar(update_per_second=1),
         wandb.keras.WandbCallback()
     ])
     callback.set_model(model)
@@ -223,8 +223,8 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
     def test_step(input_ids, labels):
         return model([input_ids, labels], training=False)
 
-    def train_one_step():
-        for index, (input_ids, labels) in enumerate(train_dataset):
+    def train_one_step(progbar: utils.Progbar):
+        for index, (input_ids, labels) in enumerate(train_dataset.take(steps_per_epoch)):
             callback.on_train_batch_begin(index)
             total_loss, outputs = train_step(input_ids, labels)
 
@@ -232,10 +232,14 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
             metric_maps['train']['total_loss'].update_state(values=total_loss)
             metric_fn(metric_maps['train'], outputs)
 
-            callback.on_train_batch_end(index, logs=create_metric_logs(metric_maps['train']))
+            logs = create_metric_logs(metric_maps['train'])
+            progbar.update(index, values=[(k, v) for k, v in logs.items()])
+
+            callback.on_train_batch_end(index, logs=logs)
         return create_metric_logs(metric_maps['train'])
 
-    def test_one_step():
+    def evaluate():
+        callback.on_test_begin()
         for index, (input_ids, labels) in enumerate(valid_dataset):
             callback.on_test_batch_begin(index)
             total_loss, outputs = test_step(input_ids, labels)
@@ -244,28 +248,40 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
             metric_maps['valid']['total_loss'].update_state(values=total_loss)
             metric_fn(metric_maps['valid'], outputs)
 
-            callback.on_test_batch_begin(index, logs=create_metric_logs(metric_maps['valid']))
-        return create_metric_logs(metric_maps['valid'])
+            callback.on_test_batch_end(index, logs=create_metric_logs(metric_maps['valid']))
+        logs = create_metric_logs(metric_maps['valid'])
+        callback.on_test_end(logs)
+        return logs
 
-    # current_step = 1
-    for epoch in range(config.initial_epoch, config.epochs):
-        callback.on_epoch_begin(epoch)
-        logs = {}
-
-        train_logs = train_one_step()
-        logs.update(train_logs)
-
-        test_logs = test_one_step()
-        test_logs = {'val_' + key: value for key, value in test_logs.items()}
-        logs.update(test_logs)
-
-        wandb.log(logs, step=epoch + 1)
-
+    def reset_metrics():
         # reset all metric states
         for key in metric_maps.keys():
             [metric.reset_state() for metric in metric_maps[key].values()]
 
-        callback.on_epoch_end(epoch, logs=logs)
+    training_logs = None
+    callback.on_train_begin()
+    for epoch in range(config.initial_epoch, config.epochs):
+        reset_metrics()
+        callback.on_epoch_begin(epoch)
+        print('\nEpoch: {}/{}'.format(epoch + 1, config.epochs))
+
+        bar = utils.Progbar(steps_per_epoch,
+                            stateful_metrics=[metric.name for metric in metric_maps['train'].values()])
+        train_logs = train_one_step(bar)
+        epoch_logs = copy.copy(train_logs)
+
+        val_logs = evaluate()
+        val_logs = {'val_' + key: value for key, value in val_logs.items()}
+        epoch_logs.update(val_logs)
+
+        bar.update(steps_per_epoch,
+                   values=[(k, v) for k, v in epoch_logs.items()],
+                   finalize=True)
+        wandb.log(epoch_logs, step=epoch + 1)
+        training_logs = epoch_logs
+
+        callback.on_epoch_end(epoch, logs=epoch_logs)
+    callback.on_train_end(training_logs)
 
 
 def main():
