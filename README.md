@@ -1,2 +1,2 @@
-# CoRT: Contrastive Rhetorical Sentence Tagging
+# CoRT: Contrastive Rhetorical Tagging
 
