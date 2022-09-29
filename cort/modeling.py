@@ -2,9 +2,10 @@ import collections
 
 import tensorflow as tf
 
-from cort.config import Config, ConfigLike
-from tensorflow.keras import models, layers
 from transformers import TFAutoModel
+from cort.config import Config, ConfigLike
+from cort.pretrained import migrator
+from tensorflow.keras import models, layers
 
 
 def create_attention_mask(inputs, pad_token):
@@ -21,11 +22,18 @@ class CortModel(models.Model):
         self.config = Config.parse_config(config)
         super(CortModel, self).__init__(**kwargs)
 
-        if config.model_name not in ['korscielectra', 'korscibert']:
-            self.backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)
+        if config.model_name == 'korscielectra':
+            print('Migrating KorSci-ELECTRA')
+            self.backbone = migrator.migrate_electra(config.korscielectra_ckpt)
+            self.backbone.trainable = False
+        elif config.model_name == 'korscibert':
+            print('Migrating KorSci-BERT')
+            self.backbone = migrator.migrate_bert(config.korscibert_ckpt)
             self.backbone.trainable = False
         else:
-            raise NotImplemented('Backbone model for {} is not yet supported'.format(config.model_name))
+            print('Loading `{}` from HuggingFace'.format(config.model_name))
+            self.backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)
+            self.backbone.trainable = False
 
         self.repr = layers.Dense(self.config.repr_size, name='repr')
         self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')

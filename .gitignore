@@ -6,8 +6,8 @@
 data/
 notebooks/
 wandb/
-pretrained/korscibert
-pretrained/korscielectra
+cort/pretrained/korscibert
+cort/pretrained/korscielectra
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks

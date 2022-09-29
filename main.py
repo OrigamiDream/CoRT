@@ -7,14 +7,11 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-from tqdm import tqdm
 from cort.config import Config
 from cort.modeling import CortModel
 from cort.preprocessing import parse_and_preprocess_sentences
-# from pretrained.tokenization import create_tokenizer
-# from pretrained.config import create_bert_config, create_electra_config
+from cort.pretrained import migrator, tokenization
 from transformers import AutoTokenizer, AutoConfig
-from tensorflow.keras.preprocessing import sequence
 from tensorflow.keras import callbacks, optimizers, metrics, utils
 from tensorflow_addons import metrics as metrics_tfa
 from sklearn.model_selection import StratifiedKFold
@@ -35,28 +32,31 @@ def parse_arguments():
     args = parser.parse_args()
 
     config = Config(**vars(args))
-    # if config.model_name == 'korscibert':
-    #     config.pretrained_config = create_bert_config()
-    # elif config.model_name == 'korscielectra':
-    #     config.pretrained_config = create_electra_config()
-    # else:
-    #     config.pretrained_config = AutoConfig.from_pretrained(config.model_name)
-    config.pretrained_config = AutoConfig.from_pretrained(config.model_name)
+    tokenizer = create_tokenizer_from_config(config)
+    if config.model_name == 'korscibert':
+        config.pretrained_config = migrator.create_base_bert_config(tokenizer=tokenizer)
+    elif config.model_name == 'korscielectra':
+        config.pretrained_config = migrator.create_base_electra_config(tokenizer=tokenizer)
+    else:
+        config.pretrained_config = AutoConfig.from_pretrained(config.model_name)
 
     config.pretrained_config.max_position_embeddings = min(512, config.pretrained_config.max_position_embeddings)
     return config
 
 
+def create_tokenizer_from_config(config):
+    if config.model_name == 'korscibert':
+        tokenizer = tokenization.create_tokenizer('./pretrained/korscibert/vocab_kisti.txt', tokenizer_type='bert')
+    elif config.model_name == 'korscielectra':
+        tokenizer = tokenization.create_tokenizer('./pretrained/korscielectra/data/vocab.txt', tokenizer_type='electra')
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(config.model_name)
+    return tokenizer
+
+
 def setup_datagen(config: Config):
     df = parse_and_preprocess_sentences(config.train_path, debug=True)
-
-    # if config.model_name == 'korscibert':
-    #     tokenizer = create_tokenizer('./pretrained/korscibert/vocab_kisti.txt', tokenizer_type='bert')
-    # elif config.model_name == 'korscielectra':
-    #     tokenizer = create_tokenizer('./pretrained/korscielectra/data/vocab.txt', tokenizer_type='electra')
-    # else:
-    #     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
-    tokenizer = AutoTokenizer.from_pretrained(config.model_name)
+    tokenizer = create_tokenizer_from_config(config)
 
     # pretrained_config = config.pretrained_config
     # max_length = pretrained_config.max_position_embeddings
