@@ -9,9 +9,9 @@ class TokenizerDelegate:
     def __init__(self, delegate: Union[BertTokenizer, ElectraTokenizer], max_length: int = 512):
         self.delegate = delegate
         self.max_length = max_length
-        self.cls_token_id = self.delegate.convert_tokens_to_ids('[CLS]')
-        self.sep_token_id = self.delegate.convert_tokens_to_ids('[SEP]')
-        self.pad_token_id = self.delegate.convert_tokens_to_ids('[PAD]')
+        self.cls_token_id = self.delegate.convert_tokens_to_ids(['[CLS]'])[0]
+        self.sep_token_id = self.delegate.convert_tokens_to_ids(['[SEP]'])[0]
+        self.pad_token_id = self.delegate.convert_tokens_to_ids(['[PAD]'])[0]
         self.num_reserved_tokens = 2
 
     def tokenize(self, text):
@@ -37,7 +37,7 @@ class TokenizerDelegate:
             'attention_mask': [],
             'token_type_ids': []
         }
-        for text in tqdm(texts, desc='Tokenizing', ncols=30):
+        for text in tqdm(texts, desc='Tokenizing', ncols=120):
             # tokenize to token_ids
             tokens = self.tokenize(text)
             tokens = self.convert_tokens_to_ids(tokens)
@@ -54,9 +54,9 @@ class TokenizerDelegate:
                 pads = [self.pad_token_id] * remains
                 tokens = tokens + pads
                 attention_mask = [0] * remains
-                assert len(texts) == self.max_length, (
+                assert len(tokens) == self.max_length, (
                     'Padded texts length must be {}, but received {} instead'
-                    .format(self.max_length, len(texts))
+                    .format(self.max_length, len(tokens))
                 )
 
             token_type_ids = [0] * len(tokens)

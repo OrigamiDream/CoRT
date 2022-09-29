@@ -46,9 +46,11 @@ def parse_arguments():
 
 def create_tokenizer_from_config(config):
     if config.model_name == 'korscibert':
-        tokenizer = tokenization.create_tokenizer('./pretrained/korscibert/vocab_kisti.txt', tokenizer_type='bert')
+        tokenizer = tokenization.create_tokenizer('./cort/pretrained/korscibert/vocab_kisti.txt',
+                                                  tokenizer_type='bert')
     elif config.model_name == 'korscielectra':
-        tokenizer = tokenization.create_tokenizer('./pretrained/korscielectra/data/vocab.txt', tokenizer_type='electra')
+        tokenizer = tokenization.create_tokenizer('./cort/pretrained/korscielectra/data/vocab.txt',
+                                                  tokenizer_type='electra')
     else:
         tokenizer = AutoTokenizer.from_pretrained(config.model_name)
     return tokenizer

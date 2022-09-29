@@ -31,8 +31,10 @@ class Config:
         self.alpha = kwargs.pop('alpha', 2.0)
 
         # Constants
-        self.korscibert_ckpt = kwargs.pop('korscibert_ckpt', './pretrained/korscibert/model.ckpt-262500')
-        self.korscielectra_ckpt = kwargs.pop('korscielectra_ckpt', './pretrained/korscielectra/data/models/korsci_base')
+        self.korscibert_ckpt = kwargs.pop('korscibert_ckpt',
+                                          './cort/pretrained/korscibert/model.ckpt-262500')
+        self.korscielectra_ckpt = kwargs.pop('korscielectra_ckpt',
+                                             './cort/pretrained/korscielectra/data/models/korsci_base')
 
     def to_dict(self) -> Dict[str, Any]:
         return copy.deepcopy(self.__dict__)

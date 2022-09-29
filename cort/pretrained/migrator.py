@@ -9,7 +9,7 @@ from transformers import TFBertModel, BertConfig
 
 
 def apply_vocabulary_to_config(config: Union[ElectraConfig, BertConfig], tokenizer):
-    config.pad_token_id = tokenizer.convert_tokens_to_ids('[PAD]')
+    config.pad_token_id = tokenizer.convert_tokens_to_ids(['[PAD]'])[0]
     return config
 
 
