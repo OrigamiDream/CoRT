@@ -1,4 +1,4 @@
-program: main.py
+program: run_finetuning.py
 project: CoRT
 description: K-Fold CV for CoRT
 method: grid
