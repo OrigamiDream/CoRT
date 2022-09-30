@@ -14,8 +14,13 @@ from cort.preprocessing import parse_and_preprocess_sentences
 from cort.pretrained import migrator, tokenization
 from transformers import AutoTokenizer, AutoConfig
 from tensorflow.keras import callbacks, optimizers, metrics, utils
+from tensorflow.python.framework import smart_cond
 from tensorflow_addons import metrics as metrics_tfa
 from sklearn.model_selection import StratifiedKFold
+from sklearn.utils.class_weight import compute_class_weight
+
+
+DEBUG = True
 
 
 def parse_arguments():
@@ -113,7 +118,23 @@ def splits_into_fold(config: Config, input_ids, labels):
         valid_labels = labels[valid_indices]
 
         steps_per_epoch = len(train_input_ids) // config.batch_size
-        return (train_input_ids, train_labels), (valid_input_ids, valid_labels), steps_per_epoch
+        class_weights = compute_class_weight('balanced',
+                                             classes=np.unique(train_labels),
+                                             y=train_labels)
+        class_weights = dict(enumerate(class_weights))
+        if DEBUG:
+            print('Class weights:')
+            for i in range(config.num_labels):
+                print('  Label #{}: {}'.format(i, class_weights[i]))
+            print()
+        FoldedDatasetOutput = collections.namedtuple('FoldedDatasetOutput', [
+            'training', 'validation',
+            'steps_per_epoch', 'class_weights'
+        ])
+        return FoldedDatasetOutput(training=(train_input_ids, train_labels),
+                                   validation=(valid_input_ids, valid_labels),
+                                   steps_per_epoch=steps_per_epoch,
+                                   class_weights=class_weights)
 
     raise ValueError('Invalid current fold number: {} out of total {} folds'
                      .format(config.current_fold, config.num_k_fold))
@@ -131,7 +152,7 @@ def class_weight_map_fn(class_weight):
     class_weight_tensor = tf.convert_to_tensor([class_weight[int(c)] for c in class_ids])
 
     def map_fn(input_ids, labels):
-        y_classes = tf.cond(
+        y_classes = smart_cond.smart_cond(
             labels.shape.rank == 2 and tf.shape(labels)[1] > 1,
             lambda: tf.argmax(labels, axis=1),
             lambda: tf.cast(tf.reshape(labels, (-1,)), dtype=tf.int64)
@@ -276,22 +297,22 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
 
     # Training
     @tf.function
-    def train_step(input_ids, labels):
+    def train_step(inputs):
         with tf.GradientTape() as tape:
-            total_loss, outputs = model([input_ids, labels], training=True)
+            total_loss, outputs = model(list(inputs), training=True)
             unscaled_loss = tf.stop_gradient(total_loss)
         grads = tape.gradient(total_loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
         return unscaled_loss, outputs
 
     @tf.function
-    def test_step(input_ids, labels):
-        return model([input_ids, labels], training=False)
+    def test_step(inputs):
+        return model(list(inputs), training=False)
 
     def train_one_step(progbar: utils.Progbar):
-        for index, (input_ids, labels) in enumerate(train_dataset.take(steps_per_epoch)):
+        for index, inputs in enumerate(train_dataset.take(steps_per_epoch)):
             callback.on_train_batch_begin(index)
-            total_loss, outputs = train_step(input_ids, labels)
+            total_loss, outputs = train_step(inputs)
 
             # assign new metrics
             metric_maps['train']['total_loss'].update_state(values=total_loss)
@@ -305,9 +326,9 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
 
     def evaluate():
         callback.on_test_begin()
-        for index, (input_ids, labels) in enumerate(valid_dataset):
+        for index, inputs in enumerate(valid_dataset):
             callback.on_test_batch_begin(index)
-            total_loss, outputs = test_step(input_ids, labels)
+            total_loss, outputs = test_step(inputs)
 
             # assign new metrics
             metric_maps['valid']['total_loss'].update_state(values=total_loss)
@@ -356,16 +377,17 @@ def main():
     set_random_seed(config.seed)
 
     input_ids, labels = setup_datagen(config)
-    train_data, valid_data, steps_per_epoch = splits_into_fold(config, input_ids, labels)
+    folded_output = splits_into_fold(config, input_ids, labels)
 
-    train_dataset = tf.data.Dataset.from_tensor_slices(train_data)
+    train_dataset = tf.data.Dataset.from_tensor_slices(folded_output.training)
+    train_dataset = train_dataset.map(class_weight_map_fn(folded_output.class_weights))
     train_dataset = train_dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
     train_dataset = train_dataset.batch(config.batch_size).shuffle(buffer_size=1024).repeat()
 
-    valid_dataset = tf.data.Dataset.from_tensor_slices(valid_data)
+    valid_dataset = tf.data.Dataset.from_tensor_slices(folded_output.validation)
     valid_dataset = valid_dataset.batch(config.batch_size)
 
-    run_train(config, train_dataset, valid_dataset, steps_per_epoch)
+    run_train(config, train_dataset, valid_dataset, folded_output.steps_per_epoch)
 
 
 if __name__ == '__main__':

@@ -5,7 +5,8 @@ import tensorflow as tf
 from transformers import TFAutoModel
 from cort.config import Config, ConfigLike
 from cort.pretrained import migrator
-from tensorflow.keras import models, layers
+from tensorflow.keras import models, layers, losses
+from tensorflow.python.keras.utils import losses_utils
 
 
 def create_attention_mask(inputs, pad_token):
@@ -106,7 +107,15 @@ class CortModel(models.Model):
     def call(self, inputs, training=None, mask_pos=None):
         # input_ids shape must be [B, 512]
         # labels shape must be [B,], which is not one-hot encoded.
-        input_ids, labels = inputs
+        if len(inputs) == 2:
+            input_ids, labels = inputs
+            class_weights = None
+        elif len(inputs) == 3:
+            input_ids, labels, class_weights = inputs
+        else:
+            raise ValueError(
+                'Number of inputs must be 2 or 3. 2 for [input_ids, labels] and 3 for [input_ids, labels, class_weight]'
+            )
         outputs = self.compute_backbone_representation(input_ids, training=training)
 
         # calculate losses
@@ -120,6 +129,8 @@ class CortModel(models.Model):
 
         ohe_labels = tf.one_hot(labels, depth=self.config.num_labels, dtype=tf.float32)
         cce_loss = tf.nn.softmax_cross_entropy_with_logits(ohe_labels, logits)
+        cce_loss = losses_utils.compute_weighted_loss(losses=cce_loss, sample_weight=class_weights,
+                                                      reduction=losses.Reduction.NONE)
 
         total_loss = cce_loss + (self.config.alpha * cos_loss)
 
