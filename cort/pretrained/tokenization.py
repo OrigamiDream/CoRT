@@ -1,12 +1,10 @@
 from tqdm import tqdm
 from typing import Union, List, Optional
-from cort.pretrained.korscibert.tokenization_kisti import FullTokenizer as BertTokenizer
-from cort.pretrained.korscielectra.model.tokenization import FullTokenizer as ElectraTokenizer
 
 
 class TokenizerDelegate:
 
-    def __init__(self, delegate: Union[BertTokenizer, ElectraTokenizer], max_length: int = 512):
+    def __init__(self, delegate, max_length: int = 512):
         self.delegate = delegate
         self.max_length = max_length
         self.cls_token_id = self.delegate.convert_tokens_to_ids(['[CLS]'])[0]
@@ -78,8 +76,16 @@ class TokenizerDelegate:
 def create_tokenizer(vocab_file: str, tokenizer_type: str, do_lower_case=False, max_length=512):
     tokenizer_type = tokenizer_type.lower()
     if tokenizer_type == 'electra':
+        try:
+            from cort.pretrained.korscielectra.model.tokenization import FullTokenizer as ElectraTokenizer
+        except ImportError:
+            raise ImportError('Failed to import KorSci-ELECTRA module.')
         tokenizer = ElectraTokenizer(vocab_file=vocab_file, do_lower_case=do_lower_case)
     elif tokenizer_type == 'bert':
+        try:
+            from cort.pretrained.korscibert.tokenization_kisti import FullTokenizer as BertTokenizer
+        except ImportError:
+            raise ImportError('Failed to import KorSci-BERT module.')
         tokenizer = BertTokenizer(vocab_file=vocab_file, do_lower_case=do_lower_case)
     else:
         raise AttributeError('Invalid tokenizer type: {}, Allowed: (electra, bert)'.format(tokenizer_type))
