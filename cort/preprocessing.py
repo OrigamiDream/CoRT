@@ -1,4 +1,5 @@
 import json
+import logging
 import pandas as pd
 
 from tqdm import tqdm
@@ -10,7 +11,7 @@ LABEL_NAMES = ['문제 정의', '가설 설정', '기술 정의',
                '성능/효과', '후속연구']
 
 
-def parse_and_preprocess_sentences(filepath: str, debug=True) -> pd.DataFrame:
+def parse_and_preprocess_sentences(filepath: str) -> pd.DataFrame:
     with open(filepath, 'r') as f:
         data = json.load(f)
 
@@ -19,9 +20,8 @@ def parse_and_preprocess_sentences(filepath: str, debug=True) -> pd.DataFrame:
         'sections': [],
         'labels': []
     }
-    if debug:
-        print('Reading available rows...')
-    for row in tqdm(data, disable=not debug):
+    logging.debug('Reading available rows...')
+    for row in tqdm(data):
         label = row['tag']
         dicts['sentences'].append(row['sentence'])
         dicts['labels'].append(label)
@@ -39,14 +39,12 @@ def parse_and_preprocess_sentences(filepath: str, debug=True) -> pd.DataFrame:
     df['code_sections'] = df['sections'].apply(lambda name: SECTION_NAMES.index(name))
 
     def print_description(name, stats):
-        print('Description of {}'.format(name))
+        logging.debug('{}:'.format(name))
         titles = stats.index
         for title, counts in zip(titles, stats):
-            print('  {}: {:,}'.format(title, counts))
-        print()
+            logging.debug('- {}: {:,}'.format(title, counts))
 
-    if debug:
-        print_description('Section', df['sections'].value_counts())
-        print_description('Labels', df['labels'].value_counts())
+    print_description('Section', df['sections'].value_counts())
+    print_description('Labels', df['labels'].value_counts())
 
     return df

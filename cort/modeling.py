@@ -1,3 +1,4 @@
+import logging
 import collections
 
 import tensorflow as tf
@@ -24,13 +25,13 @@ class CortModel(models.Model):
         super(CortModel, self).__init__(**kwargs)
 
         if config.model_name == 'korscielectra':
-            print('Migrating KorSci-ELECTRA')
+            logging.info('Migrating KorSci-ELECTRA')
             self.backbone = migrator.migrate_electra(config.korscielectra_ckpt)
         elif config.model_name == 'korscibert':
-            print('Migrating KorSci-BERT')
+            logging.info('Migrating KorSci-BERT')
             self.backbone = migrator.migrate_bert(config.korscibert_ckpt)
         else:
-            print('Loading `{}` from HuggingFace'.format(config.model_name))
+            logging.info('Loading `{}` from HuggingFace'.format(config.model_name))
             self.backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)
         self.backbone.trainable = config.backbone_trainable
 

@@ -2,6 +2,7 @@ import copy
 import os
 import wandb
 import random
+import logging
 import argparse
 import collections
 import numpy as np
@@ -20,7 +21,28 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.utils.class_weight import compute_class_weight
 
 
-DEBUG = True
+class Formatter(logging.Formatter):
+
+    default = '\x1b[38;5;250m'
+    info = '\x1b[38;5;255m'
+    debugging = '\x1b[38;5;245m'
+    warning = '\x1b[33;20m'
+    fatal = '\x1b[31;20m'
+    resetting = '\x1b[0m'
+
+    def format(self, record: logging.LogRecord) -> str:
+        formats = self.default + '%(asctime)s - %(levelname)s: '
+        if record.levelno == logging.DEBUG:
+            formats += self.debugging
+        elif record.levelno == logging.WARN:
+            formats += self.warning
+        elif record.levelno == logging.ERROR or record.levelno == logging.CRITICAL:
+            formats += self.fatal
+        else:
+            formats += self.info
+        formats += '%(message)s' + self.resetting
+        default_formatter = logging.Formatter(formats, datefmt='%H:%M:%S')
+        return default_formatter.format(record)
 
 
 def parse_arguments():
@@ -63,7 +85,7 @@ def create_tokenizer_from_config(config):
 
 
 def setup_datagen(config: Config):
-    df = parse_and_preprocess_sentences(config.train_path, debug=True)
+    df = parse_and_preprocess_sentences(config.train_path)
     tokenizer = create_tokenizer_from_config(config)
 
     # pretrained_config = config.pretrained_config
@@ -122,11 +144,9 @@ def splits_into_fold(config: Config, input_ids, labels):
                                              classes=np.unique(train_labels),
                                              y=train_labels)
         class_weights = dict(enumerate(class_weights))
-        if DEBUG:
-            print('Class weights:')
-            for i in range(config.num_labels):
-                print('  Label #{}: {}'.format(i, class_weights[i]))
-            print()
+        logging.debug('Class weights:')
+        for i in range(config.num_labels):
+            logging.debug('- Label #{}: {}'.format(i, class_weights[i]))
         FoldedDatasetOutput = collections.namedtuple('FoldedDatasetOutput', [
             'training', 'validation',
             'steps_per_epoch', 'class_weights'
@@ -349,7 +369,7 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
     for epoch in range(config.initial_epoch, config.epochs):
         reset_metrics()
         callback.on_epoch_begin(epoch)
-        print('\nEpoch: {}/{}'.format(epoch + 1, config.epochs))
+        print('\nEpoch {}/{}'.format(epoch + 1, config.epochs))
 
         bar = utils.Progbar(steps_per_epoch,
                             stateful_metrics=[metric.name for metric in metric_maps['train'].values()])
@@ -371,6 +391,14 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
 
 
 def main():
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(Formatter())
+
+    logging.basicConfig(level=logging.DEBUG, handlers=[
+        handler
+    ])
+
     config = parse_arguments()
     wandb.init(project='CoRT', name='CoRT-FOLD_{}'.format(config.current_fold + 1))
 
