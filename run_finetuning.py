@@ -307,6 +307,9 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
 
     # Callbacks
     callback = callbacks.CallbackList(callbacks=[
+        callbacks.ModelCheckpoint('./models/CoRT-FOLD_{}-SWEEP_{}'.format(config.current_fold, wandb.run.sweep_id),
+                                  monitor='val_total_loss',
+                                  verbose=1, save_best_only=True, save_weights_only=True),
         wandb.keras.WandbCallback()
     ])
     callback.set_model(model)
