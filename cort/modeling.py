@@ -25,15 +25,13 @@ class CortModel(models.Model):
         if config.model_name == 'korscielectra':
             print('Migrating KorSci-ELECTRA')
             self.backbone = migrator.migrate_electra(config.korscielectra_ckpt)
-            self.backbone.trainable = False
         elif config.model_name == 'korscibert':
             print('Migrating KorSci-BERT')
             self.backbone = migrator.migrate_bert(config.korscibert_ckpt)
-            self.backbone.trainable = False
         else:
             print('Loading `{}` from HuggingFace'.format(config.model_name))
             self.backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)
-            self.backbone.trainable = False
+        self.backbone.trainable = config.backbone_trainable
 
         self.repr = layers.Dense(self.config.repr_size, name='repr')
         self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')

@@ -3,12 +3,13 @@ import os
 import wandb
 import random
 import argparse
-
+import collections
 import numpy as np
 import tensorflow as tf
 
 from cort.config import Config
 from cort.modeling import CortModel
+from cort.optimization import LinearWarmUp, AdamWeightDecay
 from cort.preprocessing import parse_and_preprocess_sentences
 from cort.pretrained import migrator, tokenization
 from transformers import AutoTokenizer, AutoConfig
@@ -151,8 +152,64 @@ def set_random_seed(seed):
 
 def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
     model = CortModel(config)
-    optimizer = optimizers.Adam(learning_rate=config.learning_rate)
 
+    # Optimization
+    def _get_layer_decay(decay_rate, num_layers):
+        key_to_depths = collections.OrderedDict({
+            '/embedding/': 0,
+            '/embeddings_project/': 0,
+        })
+        total_depth = 0
+        for layer in range(num_layers):
+            total_depth += 1
+            key_to_depths['layer_._{}'.format(layer + 1)] = total_depth
+
+        total_depth += 1
+        key_to_depths['/repr/'] = total_depth
+        total_depth += 1
+        key_to_depths['/classifier/'] = total_depth
+        return {
+            key: decay_rate ** (total_depth - depth)
+            for key, depth in key_to_depths.items()
+        }
+
+    if config.lr_fn == 'cosine_decay':
+        learning_rate_fn = optimizers.schedules.CosineDecayRestarts(
+            initial_learning_rate=config.learning_rate,
+            first_decay_steps=config.cosine_annealing_freq,
+            t_mul=1.0, m_mul=1.0
+        )
+    elif config.lr_fn == 'polynomial_decay':
+        learning_rate_fn = optimizers.schedules.PolynomialDecay(
+            initial_learning_rate=config.learning_rate,
+            decay_steps=config.epochs - config.warmup_apical_epochs,
+            end_learning_rate=0.0,
+            power=config.lr_poly_decay_power
+        )
+    else:
+        raise ValueError('Invalid learning rate function type:', config.lr_fn)
+
+    if config.warmup_apical_epochs:
+        learning_rate_fn = LinearWarmUp(
+            initial_learning_rate=config.learning_rate,
+            decay_schedule_fn=learning_rate_fn,
+            warmup_steps=config.warmup_apical_epochs
+        )
+
+    layer_decay = None
+    if config.layerwise_lr_decay:
+        layer_decay = _get_layer_decay(config.layerwise_lr_decay, config.pretrained_config.num_hidden_layers)
+
+    optimizer = AdamWeightDecay(
+        learning_rate=learning_rate_fn,
+        weight_decay_rate=config.weight_decay,
+        layer_decay=layer_decay,
+        epsilon=1e-6,
+        exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm'],
+        clip_norm=config.optimizer_clip_norm
+    )
+
+    # Metrics
     def create_metric_map():
         metric_map = dict()
         metric_map['total_loss'] = metrics.Mean(name='total_loss')
@@ -203,6 +260,7 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
         'valid': create_metric_map()
     }
 
+    # Callbacks
     callback = callbacks.CallbackList(callbacks=[
         wandb.keras.WandbCallback()
     ])
@@ -212,6 +270,7 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
         'steps': steps_per_epoch,
     })
 
+    # Training
     @tf.function
     def train_step(input_ids, labels):
         with tf.GradientTape() as tape:
