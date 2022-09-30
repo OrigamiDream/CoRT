@@ -73,11 +73,7 @@ class CortModel(models.Model):
         # ([B, 1] == [1, B]) = [B, B]
         mask_pos = (tf.expand_dims(labels, axis=1) == tf.expand_dims(labels, axis=0))
         mask_pos = tf.cast(mask_pos, dtype=tf.float32)
-        # # 1. diag([B, B]) = [B,]
-        # # 2. diag([B,]) = [B, B]
-        # # 3. (mask:[B, B]) - [B, B] = [B, B]
-        # # TODO: double-diagonal matrix and mask is equivalent. What is this??
-        # mask = mask - tf.linalg.diag(tf.linalg.diag_part(mask))
+        mask_pos = mask_pos - tf.linalg.diag(tf.linalg.diag_part(mask_pos))
 
         mask_neg = (tf.expand_dims(labels, axis=1) != tf.expand_dims(labels, axis=0))
         mask_neg = tf.cast(mask_neg, dtype=tf.float32)
@@ -93,11 +89,11 @@ class CortModel(models.Model):
         norm_pooled = tf.math.l2_normalize(pooled, axis=-1)
         cosine_score = tf.matmul(norm_pooled, norm_pooled, transpose_b=True) / 0.3
         cosine_score = tf.exp(cosine_score)
-        # cosine_score = cosine_score - tf.linalg.diag(tf.linalg.diag_part(cosine_score))
+        cosine_score = cosine_score - tf.linalg.diag(tf.linalg.diag_part(cosine_score))
 
         mask_pos = (tf.expand_dims(labels, axis=1) == tf.expand_dims(labels, axis=0))
         mask_pos = tf.cast(mask_pos, dtype=tf.float32)
-        # mask = mask - tf.linalg.diag(tf.linalg.diag_part(mask))
+        mask_pos = mask_pos - tf.linalg.diag(tf.linalg.diag_part(mask_pos))
 
         cos_loss = cosine_score / tf.reduce_sum(cosine_score, axis=-1, keepdims=True)
         cos_loss = -tf.math.log(cos_loss + 1e-5)
