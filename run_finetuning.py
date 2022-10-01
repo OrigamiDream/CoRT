@@ -271,26 +271,13 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
         d = model_outputs
         dicts['contrastive_loss'].update_state(d['contrastive_loss'])
         dicts['cross_entropy_loss'].update_state(d['cross_entropy_loss'])
-        dicts['accuracy'].update_state(
-            y_true=d['ohe_labels'],
-            y_pred=d['probs']
-        )
-        dicts['precision'].update_state(
-            y_true=d['ohe_labels'],
-            y_pred=d['probs']
-        )
-        dicts['recall'].update_state(
-            y_true=d['ohe_labels'],
-            y_pred=d['probs']
-        )
-        dicts['micro_f1_score'].update_state(
-            y_true=d['ohe_labels'],
-            y_pred=d['probs']
-        )
-        dicts['macro_f1_score'].update_state(
-            y_true=d['ohe_labels'],
-            y_pred=d['probs']
-        )
+        confusion_keys = ['accuracy', 'precision', 'recall',
+                          'micro_f1_score', 'macro_f1_score']
+        for key in confusion_keys:
+            dicts[key].update_state(
+                y_true=d['ohe_labels'],
+                y_pred=d['probs']
+            )
         return dicts
 
     def create_metric_logs(dicts):
