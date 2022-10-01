@@ -12,6 +12,7 @@ class Config:
         # Training Hyperparameters
         self.seed = kwargs.pop('seed', 42)
         self.batch_size = kwargs.pop('batch_size', 64)
+        self.distribute = kwargs.pop('distribute', False)
         self.epochs = kwargs.pop('epochs', 10000)
         self.initial_epoch = kwargs.pop('initial_epoch', 0)
         self.learning_rate = kwargs.pop('learning_rate', 1e-3)

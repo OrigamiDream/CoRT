@@ -4,6 +4,7 @@ import wandb
 import random
 import logging
 import argparse
+import contextlib
 import collections
 import numpy as np
 import tensorflow as tf
@@ -43,6 +44,11 @@ class Formatter(logging.Formatter):
         formats += '%(message)s' + self.resetting
         default_formatter = logging.Formatter(formats, datefmt='%H:%M:%S')
         return default_formatter.format(record)
+
+
+@contextlib.contextmanager
+def empty_context_manager():
+    yield None
 
 
 def parse_arguments():
@@ -191,7 +197,7 @@ def set_random_seed(seed):
     os.environ['TF_CUDNN_DETERMINISTIC'] = str(seed)
 
 
-def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
+def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     model = CortModel(config)
 
     # Optimization
@@ -313,6 +319,13 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
     })
 
     # Training
+    def strategy_reduce_mean(unscaled_loss, outputs):
+        features = dict()
+        for key, value in outputs.items():
+            features[key] = strategy.reduce(tf.distribute.ReduceOp.MEAN, value, axis=None)
+        unscaled_loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, unscaled_loss, axis=None)
+        return unscaled_loss, features
+
     @tf.function
     def train_step(inputs):
         with tf.GradientTape() as tape:
@@ -323,13 +336,26 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
         return unscaled_loss, outputs
 
     @tf.function
+    def distributed_train_step(inputs):
+        unscaled_loss, outputs = strategy.run(train_step, args=(inputs,))
+        return strategy_reduce_mean(unscaled_loss, outputs)
+
+    @tf.function
     def test_step(inputs):
         return model(list(inputs), training=False)
+
+    @tf.function
+    def distributed_test_step(inputs):
+        unscaled_loss, outputs = strategy.run(test_step, args=(inputs,))
+        return strategy_reduce_mean(unscaled_loss, outputs)
+
+    train_fn = distributed_train_step if config.distribute else train_step
+    test_fn = distributed_test_step if config.distribute else test_step
 
     def train_one_step(progbar: utils.Progbar):
         for index, inputs in enumerate(train_dataset.take(steps_per_epoch)):
             callback.on_train_batch_begin(index)
-            total_loss, outputs = train_step(inputs)
+            total_loss, outputs = train_fn(inputs)
 
             # assign new metrics
             metric_maps['train']['total_loss'].update_state(values=total_loss)
@@ -345,7 +371,7 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
         callback.on_test_begin()
         for index, inputs in enumerate(valid_dataset):
             callback.on_test_batch_begin(index)
-            total_loss, outputs = test_step(inputs)
+            total_loss, outputs = test_fn(inputs)
 
             # assign new metrics
             metric_maps['valid']['total_loss'].update_state(values=total_loss)
@@ -402,6 +428,11 @@ def main():
     config = parse_arguments()
     wandb.init(project='CoRT', name='CoRT-FOLD_{}'.format(config.current_fold + 1))
 
+    strategy = tf.distribute.MirroredStrategy()
+    if config.distribute:
+        logging.info('Distributed Training Enabled')
+        config.batch_size = config.batch_size * strategy.num_replicas_in_sync
+
     set_random_seed(config.seed)
 
     input_ids, labels = setup_datagen(config)
@@ -415,7 +446,15 @@ def main():
     valid_dataset = tf.data.Dataset.from_tensor_slices(folded_output.validation)
     valid_dataset = valid_dataset.batch(config.batch_size)
 
-    run_train(config, train_dataset, valid_dataset, folded_output.steps_per_epoch)
+    if config.distribute:
+        options = tf.data.Options()
+        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+
+        train_dataset = strategy.experimental_distribute_dataset(train_dataset.with_options(options))
+        valid_dataset = strategy.experimental_distribute_dataset(valid_dataset.with_options(options))
+
+    with strategy.scope() if config.distribute else empty_context_manager():
+        run_train(strategy, config, train_dataset, valid_dataset, folded_output.steps_per_epoch)
 
 
 if __name__ == '__main__':
