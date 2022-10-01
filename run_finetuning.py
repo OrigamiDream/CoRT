@@ -374,6 +374,9 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
                    values=[(k, v) for k, v in epoch_logs.items()],
                    finalize=True)
         wandb.log(epoch_logs, step=epoch + 1)
+        wandb.log({
+            'learning_rate': learning_rate_fn(epoch)
+        }, step=epoch + 1)
         training_logs = epoch_logs
 
         callback.on_epoch_end(epoch, logs=epoch_logs)
