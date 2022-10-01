@@ -231,6 +231,13 @@ def run_train(config, train_dataset, valid_dataset, steps_per_epoch):
             end_learning_rate=0.0,
             power=config.lr_poly_decay_power
         )
+    elif config.lr_fn == 'linear_decay':
+        learning_rate_fn = optimizers.schedules.PolynomialDecay(
+            initial_learning_rate=config.learning_rate,
+            decay_steps=config.epochs - config.warmup_apical_epochs,
+            end_learning_rate=0.0,
+            power=1.0
+        )
     else:
         raise ValueError('Invalid learning rate function type:', config.lr_fn)
 

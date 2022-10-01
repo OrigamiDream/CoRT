@@ -15,7 +15,7 @@ class Config:
         self.epochs = kwargs.pop('epochs', 10000)
         self.initial_epoch = kwargs.pop('initial_epoch', 0)
         self.learning_rate = kwargs.pop('learning_rate', 1e-3)
-        self.lr_fn = kwargs.pop('lr_fn', 'cosine_decay')  # cosine_decay, polynomial_decay
+        self.lr_fn = kwargs.pop('lr_fn', 'cosine_decay')  # cosine_decay, polynomial_decay, linear_decay
         self.lr_poly_decay_power = kwargs.pop('lr_poly_decay_power', 0.5)
         self.weight_decay = kwargs.pop('weight_decay', 1e-6)
         self.warmup_apical_epochs = kwargs.pop('warmup_apical_epochs', 1000)
