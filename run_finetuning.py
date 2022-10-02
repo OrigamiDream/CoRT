@@ -207,18 +207,13 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         key_to_depths = collections.OrderedDict({
             '/embedding/': 0,
             '/embeddings_project/': 0,
+            '/repr/': num_layers + 2,
+            '/classifier/': num_layers + 2
         })
         total_depth = 0
         for layer in range(num_layers):
             total_depth += 1
             key_to_depths['layer_._{}'.format(layer + 1)] = total_depth
-
-        if 'bert' in config.model_name:
-            total_depth += 1
-            key_to_depths['/pooler/'] = total_depth
-
-        key_to_depths['repr'] = total_depth + 2
-        key_to_depths['classifier'] = total_depth + 2
 
         return {
             key: decay_rate ** (total_depth + 2 - depth)
@@ -264,8 +259,8 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     if config.layerwise_lr_decay:
         layer_decay = _get_layer_decay(config.layerwise_lr_decay, config.pretrained_config.num_hidden_layers)
         logging.info('Layer-wise LR Decay:')
-        for pattern, decay_rate in layer_decay.items():
-            logging.info('- {}: {:.06f}'.format(pattern, decay_rate))
+        for pattern, rate in layer_decay.items():
+            logging.info('- {}: {:.06f}'.format(pattern, rate))
 
     if config.weight_decay > 0.0:
         optimizer = AdamWeightDecay(
