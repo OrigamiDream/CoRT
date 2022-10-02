@@ -268,17 +268,14 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         for pattern, rate in layer_decay.items():
             logging.info('- {}: {:.06f}'.format(pattern, rate))
 
-    if config.weight_decay > 0.0:
-        optimizer = AdamWeightDecay(
-            learning_rate=learning_rate_fn,
-            weight_decay_rate=config.weight_decay,
-            layer_decay=layer_decay,
-            epsilon=1e-6,
-            exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm'],
-            clip_norm=config.optimizer_clip_norm
-        )
-    else:
-        optimizer = optimizers.Adam(learning_rate=learning_rate_fn)
+    optimizer = AdamWeightDecay(
+        learning_rate=learning_rate_fn,
+        weight_decay_rate=config.weight_decay,
+        layer_decay=layer_decay,
+        epsilon=1e-6,
+        exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm'],
+        clip_norm=config.optimizer_clip_norm
+    )
 
     # Metrics
     def create_metric_map():
