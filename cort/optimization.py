@@ -20,21 +20,18 @@ class LinearWarmUp(optimizers.schedules.LearningRateSchedule):
 
     def __call__(self, step):
         with tf.name_scope(self.name or 'LinearWarmUp') as name:
-            epochf = tf.cast(step, dtype=tf.float32)
-            warmup_stepsf = tf.cast(self.warmup_steps, dtype=tf.float32)
-            warmup_progress = epochf / warmup_stepsf
-
-            warmup_lr = self.initial_learning_rate * tf.math.pow(warmup_progress, self.power)
-            warmup_lr += self.epsilon
-
-            side_mask = tf.cast(step, dtype=tf.int64) <= self.warmup_steps
-            lhs = tf.cast(side_mask, dtype=tf.float32)
-            rhs = tf.cast(~side_mask, dtype=tf.float32)
-
-            lhs *= warmup_lr
-            rhs *= self.decay_schedule_fn(step - self.warmup_steps)
-
-            return tf.add(lhs, rhs, name=name)
+            global_step_float = tf.cast(step, tf.float32)
+            warmup_steps_float = tf.cast(self.warmup_steps, tf.float32)
+            warmup_percent_done = global_step_float / warmup_steps_float
+            warmup_learning_rate = (
+                self.initial_learning_rate * tf.math.pow(warmup_percent_done, self.power)
+            )
+            return tf.cond(
+                global_step_float < warmup_steps_float,
+                lambda: warmup_learning_rate,
+                lambda: self.decay_schedule_fn(step),
+                name=name
+            )
 
     def get_config(self):
         return {
