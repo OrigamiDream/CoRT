@@ -66,16 +66,17 @@ class CortModel(models.Model):
 
         hidden_state = self.backbone(input_ids=input_ids,
                                      attention_mask=attention_mask,
-                                     token_type_ids=token_type_ids)
+                                     token_type_ids=token_type_ids,
+                                     training=training)
         hidden_state = hidden_state.last_hidden_state
         hidden_state = hidden_state[:, 0, :]  # [CLS] token embedding
 
         x = self.dropout(hidden_state, training=training)
-        x = self.repr(x)
+        x = self.repr(x, training=training)
         representation = tf.nn.tanh(x)
 
         x = self.dropout(representation, training=training)
-        logits = self.classifier(x)
+        logits = self.classifier(x, training=training)
 
         BackboneOutput = collections.namedtuple('BackboneOutput', [
             'attention_mask', 'token_type_ids', 'hidden_state', 'representation', 'logits'
