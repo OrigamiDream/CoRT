@@ -228,3 +228,63 @@ class AdamWeightDecay(optimizers.Adam):
                 if re.search(r, param_name) is not None:
                     return False
         return True
+
+
+# Inspired from https://github.com/OpenNMT/OpenNMT-tf/blob/master/opennmt/optimizers/utils.py
+class GradientAccumulator(object):
+    """Distribution strategies-aware gradient accumulation utility."""
+
+    def __init__(self):
+        """Initializes the accumulator."""
+        self.gradients = []
+        self.accum_steps = tf.Variable(
+            initial_value=0, dtype=tf.int32, trainable=False, aggregation=tf.VariableAggregation.ONLY_FIRST_REPLICA
+        )
+
+    @property
+    def step(self):
+        return self.accum_steps.value()
+
+    @property
+    def accumulated_gradients(self):
+        return list(gradient.value() if gradient is not None else gradient for gradient in self.get_replica_gradients())
+
+    def __call__(self, gradients):
+        """Accumulates :obj:`gradients`."""
+        if not self.gradients:
+            self.gradients.extend([
+                tf.Variable(tf.zeros_like(gradient), trainable=False) if gradient is not None else gradient
+                for gradient in gradients
+            ])
+
+        if len(gradients) != len(self.gradients):
+            raise ValueError('Expected %s gradients, but got %d' % (len(self.gradients), len(gradients)))
+
+        for accum_gradient, gradient in zip(self.get_replica_gradients(), gradients):
+            if accum_gradient is not None and gradient is not None:
+                accum_gradient.assign_add(gradient)
+
+        self.accum_steps.assign_add(1)
+
+    def reset(self):
+        """Resets the accumulated gradients."""
+        if self.gradients:
+            self.accum_steps.assign(0)
+
+        for gradient in self.get_replica_gradients():
+            if gradient is not None:
+                gradient.assign(tf.zeros_like(gradient))
+
+    def get_replica_gradients(self):
+        if tf.distribute.has_strategy():
+            replica_context = tf.distribute.get_replica_context()
+            if replica_context is None or tf.distribute.get_strategy().num_replicas_in_sync == 1:
+                return self.gradients
+
+            return (
+                gradient.device_map.select_for_current_replica(gradient.values, replica_context)
+                for gradient in self.gradients
+                if gradient is not None
+            )
+        else:
+            return self.gradients
