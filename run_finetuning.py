@@ -263,14 +263,10 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             learning_rate=learning_rate_fn,
             weight_decay_rate=config.weight_decay,
             layer_decay=layer_decay,
-            exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm'],
-            clip_norm=config.optimizer_clip_norm
+            exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm']
         )
     else:
-        optimizer = optimizers.Adam(
-            learning_rate=learning_rate_fn,
-            clipnorm=config.optimizer_clip_norm
-        )
+        optimizer = optimizers.Adam(learning_rate=learning_rate_fn)
 
     # Metrics
     def create_metric_map():
