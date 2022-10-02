@@ -36,7 +36,7 @@ class Config:
 
         # Model Hyperparameters
         self.classifier_dropout_prob = kwargs.pop('classifier_dropout_prob', 0.1)
-        self.backbone_trainable = kwargs.pop('backbone_trainable', False)
+        self.backbone_trainable_layers = kwargs.pop('backbone_trainable_layers', 0)
         self.loss_base = kwargs.pop('loss_base', 'margin')
         self.alpha = kwargs.pop('alpha', 2.0)
 

@@ -37,7 +37,16 @@ class CortModel(models.Model):
         else:
             logging.info('Loading `{}` from HuggingFace'.format(config.model_name))
             self.backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)
-        self.backbone.trainable = config.backbone_trainable
+        self.backbone.trainable = False
+
+        if config.backbone_trainable_layers > 0:
+            logging.info('Setting selective backbone encoder layers trainable:')
+            encoder_layers = self.backbone.layers[0].encoder.layer
+            for i in reversed(range(len(encoder_layers) - config.backbone_trainable_layers, len(encoder_layers))):
+                logging.info('- encoder/{} is now trainable'.format(encoder_layers[i].name))
+                encoder_layers[i].trainable = True
+        else:
+            logging.info('Backbone model is completely frozen')
 
         initializer_range = self.config.pretrained_config.initializer_range
         self.repr = layers.Dense(self.config.repr_size, name='repr',
