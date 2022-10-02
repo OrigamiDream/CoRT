@@ -351,7 +351,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             (clipped_accumulated_gradients, _) = tf.clip_by_global_norm(reduced_accumulated_gradients, clip_norm=1.0)
 
             # Weight update
-            optimizer.apply_gradients(zip(grads, model.trainable_variables))
+            optimizer.apply_gradients(zip(clipped_accumulated_gradients, model.trainable_variables))
             accumulator.reset()
 
         return unscaled_loss, outputs
