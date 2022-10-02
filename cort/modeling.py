@@ -41,10 +41,15 @@ class CortModel(models.Model):
 
         if config.backbone_trainable_layers > 0:
             logging.info('Setting selective backbone encoder layers trainable:')
+
             encoder_layers = self.backbone.layers[0].encoder.layer
-            for i in reversed(range(len(encoder_layers) - config.backbone_trainable_layers, len(encoder_layers))):
+            num_trainable_layers = min(config.backbone_trainable_layers, len(encoder_layers))
+            for i in reversed(range(len(encoder_layers) - num_trainable_layers, len(encoder_layers))):
                 logging.info('- encoder/{} is now trainable'.format(encoder_layers[i].name))
                 encoder_layers[i].trainable = True
+        elif config.backbone_trainable_layers == -1:
+            logging.info('Backbone model is trainable')
+            self.backbone.trainable = True
         else:
             logging.info('Backbone model is completely frozen')
 
