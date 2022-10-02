@@ -150,9 +150,9 @@ def splits_into_fold(config: Config, input_ids, labels):
                                              classes=np.unique(train_labels),
                                              y=train_labels)
         class_weights = dict(enumerate(class_weights))
-        logging.debug('Class weights:')
+        logging.info('Class weights:')
         for i in range(config.num_labels):
-            logging.debug('- Label #{}: {}'.format(i, class_weights[i]))
+            logging.info('- Label #{}: {}'.format(i, class_weights[i]))
         FoldedDatasetOutput = collections.namedtuple('FoldedDatasetOutput', [
             'training', 'validation',
             'steps_per_epoch', 'class_weights'
@@ -424,7 +424,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
 
 def main():
     handler = logging.StreamHandler()
-    handler.setLevel(logging.DEBUG)
+    handler.setLevel(logging.INFO)
     handler.setFormatter(Formatter())
 
     logging.basicConfig(level=logging.DEBUG, handlers=[
