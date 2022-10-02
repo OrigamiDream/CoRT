@@ -215,10 +215,6 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             total_depth += 1
             key_to_depths['/layer_._{}/'.format(layer)] = total_depth
 
-        if 'bert' in config.model_name:
-            total_depth += 1
-            key_to_depths['/pooler/'] = total_depth
-
         key_to_depths['/repr/'] = total_depth + 1
         key_to_depths['/classifier/'] = total_depth + 1
 
