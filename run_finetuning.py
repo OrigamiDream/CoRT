@@ -11,7 +11,7 @@ import tensorflow as tf
 
 from cort.config import Config
 from cort.modeling import CortModel
-from cort.optimization import LinearWarmUp, AdamWeightDecay
+from cort.optimization import LinearWarmUp, AdamWeightDecay, GradientAccumulator
 from cort.preprocessing import parse_and_preprocess_sentences
 from cort.pretrained import migrator, tokenization
 from transformers import AutoTokenizer, AutoConfig
@@ -145,7 +145,7 @@ def splits_into_fold(config: Config, input_ids, labels):
         valid_input_ids = input_ids[valid_indices]
         valid_labels = labels[valid_indices]
 
-        steps_per_epoch = len(train_input_ids) // config.batch_size
+        steps_per_epoch = len(train_input_ids) // config.batch_size // config.gradient_accumulation_steps
         class_weights = compute_class_weight('balanced',
                                              classes=np.unique(train_labels),
                                              y=train_labels)
@@ -201,6 +201,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     model = CortModel(config)
     if config.restore_checkpoint:
         model.load_weights(config.restore_checkpoint)
+    accumulator = GradientAccumulator()
 
     # Optimization
     def _get_layer_decay(decay_rate, num_layers):
@@ -213,7 +214,11 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         total_depth = 0
         for layer in range(num_layers):
             total_depth += 1
-            key_to_depths['layer_._{}'.format(layer + 1)] = total_depth
+            key_to_depths['/layer_._{}/'.format(layer)] = total_depth
+
+        if 'bert' in config.model_name:
+            total_depth += 1
+            key_to_depths['/pooler/'] = total_depth
 
         return {
             key: decay_rate ** (total_depth + 2 - depth)
@@ -334,17 +339,31 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         return unscaled_loss, features
 
     @tf.function
-    def train_step(inputs):
+    def train_step(inputs, take_step):
         with tf.GradientTape() as tape:
             total_loss, outputs = model(list(inputs), training=True)
             unscaled_loss = tf.stop_gradient(total_loss)
         grads = tape.gradient(total_loss, model.trainable_variables)
-        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+        # Accumulate gradients
+        accumulator(grads)
+        if take_step:
+            # All reduce and clip the accumulated gradients
+            reduced_accumulated_gradients = [
+                None if g is None else g / tf.cast(config.gradient_accumulation_steps, g.dtype)
+                for g in accumulator.accumulated_gradients
+            ]
+            (clipped_accumulated_gradients, _) = tf.clip_by_global_norm(reduced_accumulated_gradients, clip_norm=1.0)
+
+            # Weight update
+            optimizer.apply_gradients(zip(clipped_accumulated_gradients, model.trainable_variables))
+            accumulator.reset()
+
         return unscaled_loss, outputs
 
     @tf.function
-    def distributed_train_step(inputs):
-        unscaled_loss, outputs = strategy.run(train_step, args=(inputs,))
+    def distributed_train_step(inputs, take_step):
+        unscaled_loss, outputs = strategy.run(train_step, args=(inputs, take_step))
         return strategy_reduce_mean(unscaled_loss, outputs)
 
     @tf.function
@@ -352,7 +371,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         return model(list(inputs), training=False)
 
     @tf.function
-    def distributed_test_step(inputs):
+    def distributed_test_step(inputs,):
         unscaled_loss, outputs = strategy.run(test_step, args=(inputs,))
         return strategy_reduce_mean(unscaled_loss, outputs)
 
@@ -360,18 +379,30 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     test_fn = distributed_test_step if config.distribute else test_step
 
     def train_one_step(progbar: utils.Progbar):
-        for index, inputs in enumerate(train_dataset.take(steps_per_epoch)):
-            callback.on_train_batch_begin(index)
-            total_loss, outputs = train_fn(inputs)
+        accumulator.reset()
+        local_step = 0
+        for index, inputs in enumerate(train_dataset.take(steps_per_epoch * config.gradient_accumulation_steps)):
+            # Need to call apply_gradients on first step irrespective of gradient accumulation
+            # This is required for the optimizer to build its states
+            take_step = (index + 1) % config.gradient_accumulation_steps == 0 or index == 0
+            if take_step:
+                callback.on_train_batch_begin(local_step)
 
-            # assign new metrics
-            metric_maps['train']['total_loss'].update_state(values=total_loss)
-            metric_fn(metric_maps['train'], outputs)
+            total_loss, outputs = train_fn(
+                inputs, take_step=take_step
+            )
 
-            logs = create_metric_logs(metric_maps['train'])
-            progbar.update(index, values=[(k, v) for k, v in logs.items()])
+            if take_step:
+                # assign new metrics
+                metric_maps['train']['total_loss'].update_state(values=total_loss)
+                metric_fn(metric_maps['train'], outputs)
 
-            callback.on_train_batch_end(index, logs=logs)
+                logs = create_metric_logs(metric_maps['train'])
+                progbar.update(local_step, values=[(k, v) for k, v in logs.items()])
+
+                callback.on_train_batch_end(local_step, logs=logs)
+                local_step += 1
+
         return create_metric_logs(metric_maps['train'])
 
     def evaluate():
