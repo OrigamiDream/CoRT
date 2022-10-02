@@ -244,6 +244,11 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             end_learning_rate=0.0,
             power=1.0
         )
+    elif config.lr_fn == 'constant':
+        def constant_learning_rate(step):
+            return config.learning_rate
+
+        learning_rate_fn = constant_learning_rate
     else:
         raise ValueError('Invalid learning rate function type:', config.lr_fn)
 
