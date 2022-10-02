@@ -199,6 +199,8 @@ def set_random_seed(seed):
 
 def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     model = CortModel(config)
+    if config.init_checkpoint:
+        model.load_weights(config.init_checkpoint)
 
     # Optimization
     def _get_layer_decay(decay_rate, num_layers):
