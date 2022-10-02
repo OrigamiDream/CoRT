@@ -215,10 +215,6 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             total_depth += 1
             key_to_depths['/pooler/'] = total_depth
 
-        total_depth += 1
-        key_to_depths['/repr/'] = total_depth
-        total_depth += 1
-        key_to_depths['/classifier/'] = total_depth
         return {
             key: decay_rate ** (total_depth - depth)
             for key, depth in key_to_depths.items()
@@ -268,7 +264,9 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             learning_rate=learning_rate_fn,
             weight_decay_rate=config.weight_decay,
             layer_decay=layer_decay,
-            exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm']
+            epsilon=1e-6,
+            exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm'],
+            clip_norm=config.optimizer_clip_norm
         )
     else:
         optimizer = optimizers.Adam(learning_rate=learning_rate_fn)
