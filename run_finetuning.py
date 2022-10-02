@@ -217,8 +217,11 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             total_depth += 1
             key_to_depths['/pooler/'] = total_depth
 
+        key_to_depths['repr'] = total_depth + 2
+        key_to_depths['classifier'] = total_depth + 2
+
         return {
-            key: decay_rate ** (total_depth - depth)
+            key: decay_rate ** (total_depth + 2 - depth)
             for key, depth in key_to_depths.items()
         }
 
@@ -260,6 +263,9 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     layer_decay = None
     if config.layerwise_lr_decay:
         layer_decay = _get_layer_decay(config.layerwise_lr_decay, config.pretrained_config.num_hidden_layers)
+        logging.info('Layer-wise LR Decay:')
+        for pattern, decay_rate in layer_decay.items():
+            logging.info('- {}: {:.06f}'.format(pattern, decay_rate))
 
     if config.weight_decay > 0.0:
         optimizer = AdamWeightDecay(
