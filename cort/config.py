@@ -27,7 +27,7 @@ class Config:
         self.num_labels = kwargs.pop('num_labels', 9)
         self.num_sections = kwargs.pop('num_sections', 3)
         self.repr_size = kwargs.pop('repr_size', 1024)  # Size of dense representation layer for Contrastive Learning
-        self.init_checkpoint = kwargs.pop('init_checkpoint', '')
+        self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
 
         self.num_k_fold = kwargs.pop('num_f_fold', 10)
         self.current_fold = kwargs.pop('current_fold', 0)
