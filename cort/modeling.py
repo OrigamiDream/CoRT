@@ -6,7 +6,7 @@ import tensorflow as tf
 from transformers import TFAutoModel
 from cort.config import Config, ConfigLike
 from cort.pretrained import migrator
-from tensorflow.keras import models, layers, losses
+from tensorflow.keras import models, layers, losses, initializers
 from tensorflow.python.keras.utils import losses_utils
 
 
@@ -18,11 +18,15 @@ def create_token_type_ids(inputs):
     return tf.zeros_like(inputs, dtype=tf.int32)
 
 
+def get_initializer(initializer_range=0.02):
+    return initializers.TruncatedNormal(stddev=initializer_range)
+
+
 class CortModel(models.Model):
 
     def __init__(self, config: ConfigLike, **kwargs):
-        self.config = Config.parse_config(config)
         super(CortModel, self).__init__(**kwargs)
+        self.config = Config.parse_config(config)
 
         if config.model_name == 'korscielectra':
             logging.info('Migrating KorSci-ELECTRA')
@@ -35,9 +39,12 @@ class CortModel(models.Model):
             self.backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)
         self.backbone.trainable = config.backbone_trainable
 
-        self.repr = layers.Dense(self.config.repr_size, name='repr')
+        initializer_range = self.config.pretrained_config.initializer_range
+        self.repr = layers.Dense(self.config.repr_size, name='repr',
+                                 kernel_initializer=get_initializer(initializer_range))
         self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')
-        self.classifier = layers.Dense(self.config.num_labels, name='classifier')
+        self.classifier = layers.Dense(self.config.num_labels, name='classifier',
+                                       kernel_initializer=get_initializer(initializer_range))
 
     def compute_backbone_representation(self, input_ids, training=True):
         attention_mask = tf.cast(tf.math.not_equal(input_ids, self.backbone.config.pad_token_id), dtype=tf.int32)
