@@ -96,13 +96,13 @@ class AdamWeightDecay(optimizers.Adam):
             )
         return tf.no_op()
 
-    # def apply_gradients(self, grads_and_vars, name=None, experimental_aggregate_gradients=True):
-    #     grads, tvars = list(zip(*grads_and_vars))
-    #     return super(AdamWeightDecay, self).apply_gradients(
-    #         zip(grads, tvars),
-    #         name=name,
-    #         experimental_aggregate_gradients=experimental_aggregate_gradients
-    #     )
+    def apply_gradients(self, grads_and_vars, name=None, experimental_aggregate_gradients=True):
+        grads, tvars = list(zip(*grads_and_vars))
+        return super(AdamWeightDecay, self).apply_gradients(
+            zip(grads, tvars),
+            name=name,
+            experimental_aggregate_gradients=experimental_aggregate_gradients
+        )
 
     def _get_lr(self, var, apply_state):
         """Retrieves the learning rate with the given state."""
