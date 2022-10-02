@@ -208,9 +208,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         key_to_depths = collections.OrderedDict({
             '/embedding/': 0,
             '/embeddings/': 0,
-            '/embeddings_project/': 0,
-            '/repr/': num_layers + 2,
-            '/classifier/': num_layers + 2
+            '/embeddings_project/': 0
         })
         total_depth = 0
         for layer in range(num_layers):
@@ -221,8 +219,11 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             total_depth += 1
             key_to_depths['/pooler/'] = total_depth
 
+        key_to_depths['/repr/'] = total_depth + 1
+        key_to_depths['/classifier/'] = total_depth + 1
+
         return {
-            key: decay_rate ** (total_depth + 2 - depth)
+            key: decay_rate ** (total_depth + 1 - depth)
             for key, depth in key_to_depths.items()
         }
 
