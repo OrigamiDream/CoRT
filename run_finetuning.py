@@ -207,6 +207,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     def _get_layer_decay(decay_rate, num_layers):
         key_to_depths = collections.OrderedDict({
             '/embedding/': 0,
+            '/embeddings/': 0,
             '/embeddings_project/': 0,
             '/repr/': num_layers + 2,
             '/classifier/': num_layers + 2
