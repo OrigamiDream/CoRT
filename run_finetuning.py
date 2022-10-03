@@ -405,9 +405,6 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
 
     # very first evaluate for initial metric results
     evaluate(run_callback=False)
-    wandb.log({
-        'epoch': 0
-    }, step=num_steps)
 
     training_logs = None
     callback.on_train_begin()
