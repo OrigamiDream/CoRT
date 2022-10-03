@@ -202,6 +202,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     if config.restore_checkpoint:
         model.load_weights(config.restore_checkpoint)
     accumulator = GradientAccumulator()
+    total_train_steps = config.epochs * steps_per_epoch
 
     # Optimization
     def _get_layer_decay(decay_rate, num_layers):
@@ -232,14 +233,14 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     elif config.lr_fn == 'polynomial_decay':
         learning_rate_fn = optimizers.schedules.PolynomialDecay(
             initial_learning_rate=config.learning_rate,
-            decay_steps=config.epochs - config.warmup_apical_epochs,
+            decay_steps=total_train_steps - config.warmup_apical_steps,
             end_learning_rate=0.0,
             power=config.lr_poly_decay_power
         )
     elif config.lr_fn == 'linear_decay':
         learning_rate_fn = optimizers.schedules.PolynomialDecay(
             initial_learning_rate=config.learning_rate,
-            decay_steps=config.epochs - config.warmup_apical_epochs,
+            decay_steps=total_train_steps - config.warmup_apical_steps,
             end_learning_rate=0.0,
             power=1.0
         )
@@ -251,11 +252,11 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     else:
         raise ValueError('Invalid learning rate function type:', config.lr_fn)
 
-    if config.warmup_apical_epochs:
+    if config.warmup_apical_steps:
         learning_rate_fn = LinearWarmUp(
             initial_learning_rate=config.learning_rate,
             decay_schedule_fn=learning_rate_fn,
-            warmup_steps=config.warmup_apical_epochs
+            warmup_steps=config.warmup_apical_steps
         )
 
     layer_decay = None
@@ -313,17 +314,16 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     }
 
     # Callbacks
-    callback = callbacks.CallbackList(callbacks=[
+    callback_list = [
         callbacks.ModelCheckpoint('./models/CoRT-FOLD_{}-SWEEP_{}.h5'.format(config.current_fold, wandb.run.sweep_id),
                                   monitor='val_total_loss',
                                   verbose=1, save_best_only=True, save_weights_only=True),
         wandb.keras.WandbCallback()
-    ])
-    callback.set_model(model)
-    callback.set_params({
-        'epochs': config.epochs,
-        'steps': steps_per_epoch,
-    })
+    ]
+    callback = callbacks.CallbackList(callbacks=callback_list,
+                                      model=model,
+                                      epochs=config.epochs,
+                                      steps=steps_per_epoch)
 
     # Training
     def strategy_reduce_mean(unscaled_loss, outputs):
@@ -373,33 +373,6 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     train_fn = distributed_train_step if config.distribute else train_step
     test_fn = distributed_test_step if config.distribute else test_step
 
-    def train_one_step(progbar: utils.Progbar):
-        accumulator.reset()
-        local_step = 0
-        for index, inputs in enumerate(train_dataset.take(steps_per_epoch * config.gradient_accumulation_steps)):
-            # Need to call apply_gradients on first step irrespective of gradient accumulation
-            # This is required for the optimizer to build its states
-            take_step = (index + 1) % config.gradient_accumulation_steps == 0 or index == 0
-            if take_step:
-                callback.on_train_batch_begin(local_step)
-
-            total_loss, outputs = train_fn(
-                inputs, take_step=take_step
-            )
-
-            if take_step:
-                # assign new metrics
-                metric_maps['train']['total_loss'].update_state(values=total_loss)
-                metric_fn(metric_maps['train'], outputs)
-
-                logs = create_metric_logs(metric_maps['train'])
-                progbar.update(local_step, values=[(k, v) for k, v in logs.items()])
-
-                callback.on_train_batch_end(local_step, logs=logs)
-                local_step += 1
-
-        return create_metric_logs(metric_maps['train'])
-
     def evaluate():
         callback.on_test_begin()
         for index, inputs in enumerate(valid_dataset):
@@ -420,31 +393,61 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         for key in metric_maps.keys():
             [metric.reset_state() for metric in metric_maps[key].values()]
 
+    num_steps = 0
     training_logs = None
     callback.on_train_begin()
     for epoch in range(config.initial_epoch, config.epochs):
         reset_metrics()
         callback.on_epoch_begin(epoch)
-        print('\nEpoch {}/{}'.format(epoch + 1, config.epochs))
+        print('\nEpoch {}/{} (current_steps: {})'.format(epoch + 1, config.epochs, num_steps))
 
-        bar = utils.Progbar(steps_per_epoch,
-                            stateful_metrics=[metric.name for metric in metric_maps['train'].values()])
-        train_logs = train_one_step(bar)
+        progbar = utils.Progbar(steps_per_epoch,
+                                stateful_metrics=[metric.name for metric in metric_maps['train'].values()])
+        accumulator.reset()
+        local_step = 0
+        for step, input_batches in enumerate(train_dataset.take(steps_per_epoch * config.gradient_accumulation_steps)):
+            # Need to call apply_gradients on very first step irrespective of gradient accumulation
+            # This is required for the optimizer to build its states
+            accumulation_step = (step + 1) % config.gradient_accumulation_steps == 0 or num_steps == 0
+            if accumulation_step:
+                callback.on_train_batch_begin(local_step)
+
+            training_loss, eval_inputs = train_fn(
+                input_batches, take_step=accumulation_step
+            )
+
+            if accumulation_step:
+                # assign new metrics
+                metric_maps['train']['total_loss'].update_state(values=training_loss)
+                metric_fn(metric_maps['train'], eval_inputs)
+
+                batch_logs = create_metric_logs(metric_maps['train'])
+                progbar.update(local_step, values=[(k, v) for k, v in batch_logs.items()])
+
+                # WandB step-wise logging during training
+                wandb.log(batch_logs, step=num_steps)
+                wandb.log({
+                    'learning_rate': learning_rate_fn(num_steps)
+                }, step=num_steps)
+
+                callback.on_train_batch_end(local_step, logs=batch_logs)
+                local_step += 1
+                num_steps += 1
+
+        train_logs = create_metric_logs(metric_maps['train'])
         epoch_logs = copy.copy(train_logs)
 
         val_logs = evaluate()
         val_logs = {'val_' + key: value for key, value in val_logs.items()}
         epoch_logs.update(val_logs)
 
-        bar.update(steps_per_epoch,
-                   values=[(k, v) for k, v in epoch_logs.items()],
-                   finalize=True)
-        wandb.log(epoch_logs, step=epoch + 1)
-        wandb.log({
-            'learning_rate': learning_rate_fn(epoch)
-        }, step=epoch + 1)
-        training_logs = epoch_logs
+        # WandB step-wise logging after evaluation
+        wandb.log(val_logs, step=num_steps)
 
+        progbar.update(steps_per_epoch,
+                       values=[(k, v) for k, v in epoch_logs.items()],
+                       finalize=True)
+        training_logs = epoch_logs
         callback.on_epoch_end(epoch, logs=epoch_logs)
     callback.on_train_end(training_logs)
 
