@@ -27,7 +27,7 @@ class LinearWarmUp(optimizers.schedules.LearningRateSchedule):
             warmup_lr = self.initial_learning_rate * tf.math.pow(warmup_progress, self.power)
             warmup_lr += self.epsilon
 
-            side_mask = step <= self.warmup_steps
+            side_mask = tf.cast(step, dtype=tf.int64) <= self.warmup_steps
             lhs = tf.cast(side_mask, dtype=tf.float32)
             rhs = tf.cast(~side_mask, dtype=tf.float32)
 
