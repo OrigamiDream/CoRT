@@ -314,9 +314,10 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         'valid': create_metric_map()
     }
 
+    ckpt_file_name = 'CoRT-SWEEP_{}-RUN_{}.h5'.format(wandb.run.sweep_id, wandb.run.id)
     # Callbacks
     callback_list = [
-        callbacks.ModelCheckpoint('./models/CoRT-FOLD_{}-SWEEP_{}.h5'.format(config.current_fold, wandb.run.sweep_id),
+        callbacks.ModelCheckpoint(os.path.join('./models', ckpt_file_name),
                                   monitor='val_total_loss',
                                   verbose=1, save_best_only=True, save_weights_only=True),
         wandb.keras.WandbCallback()
@@ -472,7 +473,17 @@ def main():
     ])
 
     config = parse_arguments()
-    wandb.init(project='CoRT', name='CoRT-FOLD_{}'.format(config.current_fold + 1))
+
+    if config.cross_validation == 'kfold':
+        wandb.init(project='CoRT', name='CoRT-KFOLD_{}'.format(config.current_fold + 1))
+    elif config.cross_validation == 'hyperparams':
+        wandb.init(project='CoRT')
+    else:
+        raise ValueError('Invalid CV strategy: {}'.format(config.cross_validation))
+
+    logging.info('WandB setup:')
+    logging.info('- Sweep ID: {}'.format(wandb.run.sweep_id))
+    logging.info('- Run ID: {}'.format(wandb.run.id))
 
     strategy = tf.distribute.MirroredStrategy()
     if config.distribute:

@@ -30,6 +30,7 @@ class Config:
         self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
         self.gradient_accumulation_steps = kwargs.pop('gradient_accumulation_steps', 1)
 
+        self.cross_validation = kwargs.pop('cross_validation', 'kfold')  # kfold, hyperparams
         self.num_k_fold = kwargs.pop('num_f_fold', 10)
         self.current_fold = kwargs.pop('current_fold', 0)
         self.model_name = kwargs.pop('model_name', 'klue/roberta-base')
