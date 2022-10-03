@@ -203,6 +203,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         model.load_weights(config.restore_checkpoint)
     accumulator = GradientAccumulator()
     total_train_steps = config.epochs * steps_per_epoch
+    num_steps = 0
 
     # Optimization
     def _get_layer_decay(decay_rate, num_layers):
@@ -373,33 +374,46 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     train_fn = distributed_train_step if config.distribute else train_step
     test_fn = distributed_test_step if config.distribute else test_step
 
-    def evaluate():
-        callback.on_test_begin()
+    def evaluate(run_callback=True):
+        if run_callback:
+            callback.on_test_begin()
         for index, inputs in enumerate(valid_dataset):
-            callback.on_test_batch_begin(index)
+            if run_callback:
+                callback.on_test_batch_begin(index)
             total_loss, outputs = test_fn(inputs)
 
             # assign new metrics
             metric_maps['valid']['total_loss'].update_state(values=total_loss)
             metric_fn(metric_maps['valid'], outputs)
 
-            callback.on_test_batch_end(index, logs=create_metric_logs(metric_maps['valid']))
+            if run_callback:
+                callback.on_test_batch_end(index, logs=create_metric_logs(metric_maps['valid']))
         logs = create_metric_logs(metric_maps['valid'])
-        callback.on_test_end(logs)
-        return logs
+        if run_callback:
+            callback.on_test_end(logs)
+
+        val_logs = {'val_' + key: value for key, value in logs.items()}
+        # WandB step-wise logging after evaluation
+        wandb.log(val_logs, step=num_steps)
+        return val_logs
 
     def reset_metrics():
         # reset all metric states
         for key in metric_maps.keys():
             [metric.reset_state() for metric in metric_maps[key].values()]
 
-    num_steps = 0
+    # very first evaluate for initial metric results
+    evaluate(run_callback=False)
+    wandb.log({
+        'epoch': 0
+    }, step=num_steps)
+
     training_logs = None
     callback.on_train_begin()
     for epoch in range(config.initial_epoch, config.epochs):
         reset_metrics()
         callback.on_epoch_begin(epoch)
-        print('\nEpoch {}/{} (current_steps: {})'.format(epoch + 1, config.epochs, num_steps))
+        print('\nEpoch {}/{}'.format(epoch + 1, config.epochs))
 
         progbar = utils.Progbar(steps_per_epoch,
                                 stateful_metrics=[metric.name for metric in metric_maps['train'].values()])
@@ -437,12 +451,8 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         train_logs = create_metric_logs(metric_maps['train'])
         epoch_logs = copy.copy(train_logs)
 
-        val_logs = evaluate()
-        val_logs = {'val_' + key: value for key, value in val_logs.items()}
-        epoch_logs.update(val_logs)
-
-        # WandB step-wise logging after evaluation
-        wandb.log(val_logs, step=num_steps)
+        eval_logs = evaluate()
+        epoch_logs.update(eval_logs)
 
         progbar.update(steps_per_epoch,
                        values=[(k, v) for k, v in epoch_logs.items()],
