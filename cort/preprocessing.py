@@ -27,10 +27,11 @@ SPECIAL_CHAR_REPLACEMENTS = [
     ('팔꿉', '팔꿈치'), ('θ', '세타'), ('뻣나무', '벚나무'),
 ]
 
+RESEARCH_PURPOSE = ['문제 정의', '가설 설정', '기술 정의']
+RESEARCH_METHOD = ['제안 방법', '대상 데이터', '데이터처리', '이론/모형']
+RESEARCH_RESULT = ['성능/효과', '후속연구']
 SECTION_NAMES = ['연구 목적', '연구 방법', '연구 결과']
-LABEL_NAMES = ['문제 정의', '가설 설정', '기술 정의',
-               '제안 방법', '대상 데이터', '데이터처리', '이론/모형',
-               '성능/효과', '후속연구']
+LABEL_NAMES = RESEARCH_PURPOSE + RESEARCH_METHOD + RESEARCH_RESULT
 
 
 def parse_and_preprocess_sentences(filepath: str) -> pd.DataFrame:
@@ -47,11 +48,11 @@ def parse_and_preprocess_sentences(filepath: str) -> pd.DataFrame:
         label = row['tag']
         dicts['sentences'].append(row['sentence'])
         dicts['labels'].append(label)
-        if label in ['문제 정의', '가설 설정', '기술 정의']:
+        if label in RESEARCH_PURPOSE:
             dicts['sections'].append('연구 목적')
-        elif label in ['제안 방법', '대상 데이터', '데이터처리', '이론/모형']:
+        elif label in RESEARCH_METHOD:
             dicts['sections'].append('연구 방법')
-        elif label in ['성능/효과', '후속연구']:
+        elif label in RESEARCH_RESULT:
             dicts['sections'].append('연구 결과')
         else:
             raise ValueError('Invalid label: {}'.format(label))
