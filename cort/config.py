@@ -46,6 +46,7 @@ class Config:
                                           './cort/pretrained/korscibert/model.ckpt-262500')
         self.korscielectra_ckpt = kwargs.pop('korscielectra_ckpt',
                                              './cort/pretrained/korscielectra/data/models/korsci_base')
+        self.num_processes = kwargs.pop('num_processes', -1)
 
     def to_dict(self) -> Dict[str, Any]:
         return copy.deepcopy(self.__dict__)

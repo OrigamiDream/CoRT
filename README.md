@@ -10,4 +10,5 @@
 - wandb
 - pandas
 - konlpy 
+- soynlp
 ```

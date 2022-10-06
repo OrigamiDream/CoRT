@@ -12,7 +12,7 @@ import tensorflow as tf
 from cort.config import Config
 from cort.modeling import CortModel
 from cort.optimization import LinearWarmUp, AdamWeightDecay, GradientAccumulator
-from cort.preprocessing import parse_and_preprocess_sentences
+from cort.preprocessing import parse_and_preprocess_sentences, normalize_texts, run_multiprocessing_job
 from cort.pretrained import migrator, tokenization
 from transformers import AutoTokenizer, AutoConfig
 from tensorflow.keras import callbacks, optimizers, metrics, utils
@@ -90,38 +90,26 @@ def create_tokenizer_from_config(config):
     return tokenizer
 
 
+def preprocess_sentences_on_batch(batch):
+    sentences = []
+    for sentence in batch:
+        sentence = normalize_texts(sentence)
+        sentences.append(sentence)
+    return sentences
+
+
 def setup_datagen(config: Config):
     df = parse_and_preprocess_sentences(config.train_path)
     tokenizer = create_tokenizer_from_config(config)
 
-    # pretrained_config = config.pretrained_config
-    # max_length = pretrained_config.max_position_embeddings
-    #
-    # cls_token = tokenizer.convert_tokens_to_ids('[CLS]')
-    # sep_token = tokenizer.convert_tokens_to_ids('[SEP]')
-    # pad_token = tokenizer.convert_tokens_to_ids('[PAD]')
-    # num_reserved_tokens = 2  # 2 reserved tokens for [CLS] and [SEP]
-    #
-    # input_ids = []
-    # labels = []
-    # for sentence, label in tqdm(zip(df['sentences'], df['code_labels']), total=len(df['sentences'])):
-    #     tokens = tokenizer.tokenize(sentence)[:max_length - num_reserved_tokens]
-    #     tokens = tokenizer.convert_tokens_to_ids(tokens)
-    #
-    #     tokens = [cls_token] + tokens + [sep_token]
-    #
-    #     num_pads = max_length - len(tokens)  # add paddings
-    #     tokens = tokens + [pad_token] * num_pads
-    #
-    #     input_ids.append(tokens)
-    #     labels.append(label)
-    #
-    # input_ids = sequence.pad_sequences(input_ids,
-    #                                    maxlen=max_length,
-    #                                    padding='post', truncating='post',
-    #                                    value=pad_token)
+    # preprocess in multiprocessing manner
+    results = run_multiprocessing_job(preprocess_sentences_on_batch, df['sentences'],
+                                      num_processes=config.num_processes)
+    sentences = []
+    for sentences_batch in results:
+        sentences += sentences_batch
 
-    tokenized = tokenizer(list(df['sentences']),
+    tokenized = tokenizer(sentences,
                           padding='max_length',
                           truncation=True,
                           return_attention_mask=False,
