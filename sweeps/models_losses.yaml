@@ -37,7 +37,7 @@ parameters:
   repr_size:
     values: [512, 1024, 2048]
   backbone_trainable_layers:
-    values: 1
+    value: 1
   alpha:
     distribution: uniform
     min: 1.0
