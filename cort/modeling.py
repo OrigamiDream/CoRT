@@ -143,8 +143,10 @@ class CortModel(models.Model):
 
         if self.config.loss_base == 'margin':
             cos_loss = self.calc_margin_based_contrastive_loss(pooled, labels)
-        else:
+        elif self.config.loss_base == 'supervised':
             cos_loss = self.calc_supervised_contrastive_loss(pooled, labels)
+        else:
+            raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
 
         ohe_labels = tf.one_hot(labels, depth=self.config.num_labels, dtype=tf.float32)
         cce_loss = tf.nn.softmax_cross_entropy_with_logits(ohe_labels, logits)

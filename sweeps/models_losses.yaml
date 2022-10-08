@@ -1,0 +1,50 @@
+program: run_finetuning.py
+project: CoRT
+description: Models and Losses Hyperparameters Bayes Search for CoRT
+method: bayes
+metric:
+  name: val_total_loss
+  goal: minimize
+parameters:
+  cross_validation:
+    value: hyperparams
+  model_name:
+    values:
+      - klue/roberta-base
+      - korscielectra
+      - korscibert
+  loss_base:
+    values:
+      - margin
+      - supervised
+  learning_rate:
+    distribution: uniform
+    min: 0.00001
+    max: 0.0001
+  lr_fn:
+    values:
+      - cosine_decay
+      - polynomial_decay
+      - linear_decay
+  layerwise_lr_decay:
+    distribution: uniform
+    min: 0.6
+    max: 0.9
+  weight_decay:
+    distribution: uniform
+    min: 0.000001
+    max: 0.01
+  repr_size:
+    values: [512, 1024, 2048]
+  backbone_trainable_layers:
+    values: 1
+  alpha:
+    distribution: uniform
+    min: 1.0
+    max: 5.0
+  batch_size:
+    values: [16, 32]
+  gradient_accumulation_steps:
+    distribution: int_uniform
+    min: 1
+    max: 6
