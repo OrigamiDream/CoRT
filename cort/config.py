@@ -19,7 +19,7 @@ class Config:
         self.lr_fn = kwargs.pop('lr_fn', 'cosine_decay')  # constant, cosine_decay, polynomial_decay, linear_decay
         self.lr_poly_decay_power = kwargs.pop('lr_poly_decay_power', 0.5)
         self.weight_decay = kwargs.pop('weight_decay', 1e-6)
-        self.warmup_apical_steps = kwargs.pop('warmup_apical_steps', 1600)
+        self.warmup_rate = kwargs.pop('warmup_rate', 0.06)
         self.cosine_annealing_freq = kwargs.pop('cosine_annealing_freq', 3000)
         self.layerwise_lr_decay = kwargs.pop('layerwise_lr_decay', 0.0)
         self.optimizer_clip_value = kwargs.pop('optimizer_clip_value', 0.5)

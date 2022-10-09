@@ -191,6 +191,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         model.load_weights(config.restore_checkpoint)
     accumulator = GradientAccumulator()
     total_train_steps = config.epochs * steps_per_epoch
+    warmup_apical_steps = int(max(1, total_train_steps * config.warmup_rate))
     num_steps = 0
 
     # Optimization
@@ -222,14 +223,14 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     elif config.lr_fn == 'polynomial_decay':
         learning_rate_fn = optimizers.schedules.PolynomialDecay(
             initial_learning_rate=config.learning_rate,
-            decay_steps=total_train_steps - config.warmup_apical_steps,
+            decay_steps=total_train_steps - warmup_apical_steps,
             end_learning_rate=0.0,
             power=config.lr_poly_decay_power
         )
     elif config.lr_fn == 'linear_decay':
         learning_rate_fn = optimizers.schedules.PolynomialDecay(
             initial_learning_rate=config.learning_rate,
-            decay_steps=total_train_steps - config.warmup_apical_steps,
+            decay_steps=total_train_steps - warmup_apical_steps,
             end_learning_rate=0.0,
             power=1.0
         )
@@ -241,11 +242,11 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     else:
         raise ValueError('Invalid learning rate function type:', config.lr_fn)
 
-    if config.warmup_apical_steps:
+    if config.warmup_rate:
         learning_rate_fn = LinearWarmUp(
             initial_learning_rate=config.learning_rate,
             decay_schedule_fn=learning_rate_fn,
-            warmup_steps=config.warmup_apical_steps
+            warmup_steps=warmup_apical_steps
         )
 
     layer_decay = None
