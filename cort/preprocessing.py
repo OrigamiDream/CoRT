@@ -63,14 +63,14 @@ def parse_and_preprocess_sentences(filepath: str) -> pd.DataFrame:
     df['code_labels'] = df['labels'].apply(lambda name: LABEL_NAMES.index(name))
     df['code_sections'] = df['sections'].apply(lambda name: SECTION_NAMES.index(name))
 
-    def print_description(name, stats):
+    def print_description(name, titles, stats):
         logging.info('{}:'.format(name))
-        titles = stats.index
-        for title, counts in zip(titles, stats):
-            logging.info('- {}: {:,}'.format(title, counts))
 
-    print_description('Section', df['sections'].value_counts())
-    print_description('Labels', df['labels'].value_counts())
+        for title in titles:
+            logging.info('- {}: {:,}'.format(title, stats[title]))
+
+    print_description('Section', SECTION_NAMES, df['sections'].value_counts())
+    print_description('Labels', LABEL_NAMES, df['labels'].value_counts())
 
     return df
 
