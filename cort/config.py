@@ -36,6 +36,8 @@ class Config:
         self.model_name = kwargs.pop('model_name', 'klue/roberta-base')
 
         # Model Hyperparameters
+        self.repr_classifier = kwargs.pop('repr_classifier', 'seq_cls')  # seq_cls, bi_lstm
+        self.repr_act = kwargs.pop('repr_act', 'tanh')
         self.classifier_dropout_prob = kwargs.pop('classifier_dropout_prob', 0.1)
         self.backbone_trainable_layers = kwargs.pop('backbone_trainable_layers', 0)
         self.loss_base = kwargs.pop('loss_base', 'margin')

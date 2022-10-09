@@ -53,12 +53,12 @@ class CortModel(models.Model):
         else:
             logging.info('Backbone model is completely frozen')
 
-        initializer_range = self.config.pretrained_config.initializer_range
-        self.repr = layers.Dense(self.config.repr_size, name='repr',
-                                 kernel_initializer=get_initializer(initializer_range))
-        self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')
-        self.classifier = layers.Dense(self.config.num_labels, name='classifier',
-                                       kernel_initializer=get_initializer(initializer_range))
+        if self.config.repr_classifier == 'seq_cls':
+            self.heading = CortForSequenceRepresentation(config, name='seq_repr')
+        elif self.config.repr_classifier == 'bi_lstm':
+            self.heading = CortForBidirectionalSequenceRepresentation(config, name='bi_seq_repr')
+        else:
+            raise ValueError('Invalid representation classification head: {}'.format(self.config.repr_classifier))
 
     def compute_backbone_representation(self, input_ids, training=True):
         attention_mask = tf.cast(tf.math.not_equal(input_ids, self.backbone.config.pad_token_id), dtype=tf.int32)
@@ -68,16 +68,7 @@ class CortModel(models.Model):
                                      attention_mask=attention_mask,
                                      token_type_ids=token_type_ids,
                                      training=training)
-        hidden_state = hidden_state.last_hidden_state
-        hidden_state = hidden_state[:, 0, :]  # [CLS] token embedding
-
-        x = self.dropout(hidden_state, training=training)
-        x = self.repr(x, training=training)
-        representation = tf.nn.tanh(x)
-
-        x = self.dropout(representation, training=training)
-        logits = self.classifier(x, training=training)
-
+        representation, logits = self.heading(hidden_state.last_hidden_state, training=training)
         BackboneOutput = collections.namedtuple('BackboneOutput', [
             'attention_mask', 'token_type_ids', 'hidden_state', 'representation', 'logits'
         ])
@@ -166,3 +157,94 @@ class CortModel(models.Model):
 
     def get_config(self):
         return super(CortModel, self).get_config()
+
+
+class CortForBidirectionalSequenceRepresentation(layers.Layer):
+
+    def __init__(self, config: ConfigLike, trainable=True, name=None, *args, **kwargs):
+        super(CortForBidirectionalSequenceRepresentation, self).__init__(trainable=trainable,
+                                                                         name=name, *args, **kwargs)
+        self.config = Config.parse_config(config)
+        self.bidirectional = None
+        self.average_pool = self.max_pool = None
+        self.concatenate = self.dropout = self.classifier = None
+
+    def build(self, input_shape):
+        self.bidirectional = layers.Bidirectional(layer=layers.LSTM(64, return_sequences=True), name='bi_lstm')
+        self.average_pool = layers.GlobalAveragePooling1D(name='avg_pool')
+        self.max_pool = layers.GlobalMaxPooling1D(name='max_pool')
+        self.concatenate = layers.Concatenate(name='concatenate')
+        self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')
+
+        initializer_range = self.config.pretrained_config.initializer_range
+        self.classifier = layers.Dense(self.config.num_labels, name='classifier',
+                                       kernel_initializer=get_initializer(initializer_range))
+        self.built = True
+
+    def call(self, inputs, *args, **kwargs):
+        training = kwargs['training'] if 'training' in kwargs else None
+        x = self.bidirectional(inputs, training=training)
+
+        avg_pooled = self.average_pool(x, training=training)
+        max_pooled = self.max_pool(x, training=training)
+
+        representation = self.concatenate([avg_pooled, max_pooled], training=training)
+
+        x = self.dropout(representation, training=training)
+        logits = self.classifier(x, training=training)
+        return representation, logits
+
+    def get_config(self):
+        config = super(CortForBidirectionalSequenceRepresentation, self).get_config()
+        config.update({
+            'config': self.config.to_dict()
+        })
+        return config
+
+
+class CortForSequenceRepresentation(layers.Layer):
+
+    def __init__(self, config: ConfigLike, trainable=True, name=None, *args, **kwargs):
+        super(CortForSequenceRepresentation, self).__init__(trainable=trainable, name=name, *args, **kwargs)
+
+        self.config = Config.parse_config(config)
+        self.repr = None
+        self.dropout = None
+        self.classifier = None
+        self.activation = None
+
+    def build(self, input_shape):
+        initializer_range = self.config.pretrained_config.initializer_range
+        self.repr = layers.Dense(self.config.repr_size, name='repr',
+                                 kernel_initializer=get_initializer(initializer_range))
+        self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')
+        self.classifier = layers.Dense(self.config.num_labels, name='classifier',
+                                       kernel_initializer=get_initializer(initializer_range))
+        if self.config.repr_act != 'none':
+            self.activation = layers.Activation(self.config.repr_act)
+        self.built = True
+
+    def call(self, inputs, *args, **kwargs):
+        training = kwargs['training'] if 'training' in kwargs else None
+
+        # [CLS] token embedding
+        hidden_state = inputs[:, 0, :]  # transformer.last_hidden_state[:, 0, :]
+        x = self.dropout(hidden_state, training=training)
+        x = self.repr(x, training=training)
+
+        if self.activation is not None:
+            representation = self.activation(x)
+        else:
+            representation = x
+
+        x = self.dropout(representation, training=training)
+        logits = self.classifier(x, training=training)
+
+        return representation, logits
+
+    def get_config(self):
+        config = super(CortForSequenceRepresentation, self).get_config()
+        config.update({
+            'config': self.config.to_dict()
+        })
+        return config
