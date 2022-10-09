@@ -206,8 +206,8 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             total_depth += 1
             key_to_depths['/layer_._{}/'.format(layer)] = total_depth
 
-        key_to_depths['/repr/'] = total_depth + 1
-        key_to_depths['/classifier/'] = total_depth + 1
+        key_to_depths['/seq_repr/'] = total_depth + 1
+        key_to_depths['/bi_seq_repr/'] = total_depth + 1
 
         return {
             key: decay_rate ** (total_depth + 1 - depth)
