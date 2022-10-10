@@ -17,10 +17,13 @@ parameters:
   repr_act:
     values:
       - none
-      - relu
       - tanh
       - swish
       - gelu
+  loss_base:
+    values:
+      - margin
+      - supervised
   learning_rate:
     distribution: uniform
     min: 0.00001
