@@ -332,15 +332,16 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
                 y_true=d['ohe_labels'],
                 y_pred=d['probs']
             )
-        # metrics for CoRT with elaborated representation
-        dicts['section_contrastive_loss'].update_state(d['section_contrastive_loss'])
-        dicts['section_cross_entropy_loss'].update_state(d['section_cross_entropy_loss'])
-        confusion_keys = ['section_' + key for key in confusion_keys]
-        for key in confusion_keys:
-            dicts[key].update_state(
-                y_true=d['section_ohe_labels'],
-                y_pred=d['section_probs']
-            )
+        if config.include_sections:
+            # metrics for CoRT with elaborated representation
+            dicts['section_contrastive_loss'].update_state(d['section_contrastive_loss'])
+            dicts['section_cross_entropy_loss'].update_state(d['section_cross_entropy_loss'])
+            confusion_keys = ['section_' + key for key in confusion_keys]
+            for key in confusion_keys:
+                dicts[key].update_state(
+                    y_true=d['section_ohe_labels'],
+                    y_pred=d['section_probs']
+                )
         return dicts
 
     def create_metric_logs(dicts):
