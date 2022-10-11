@@ -42,8 +42,8 @@ class Config:
         self.classifier_dropout_prob = kwargs.pop('classifier_dropout_prob', 0.1)
         self.backbone_trainable_layers = kwargs.pop('backbone_trainable_layers', 0)
         self.loss_base = kwargs.pop('loss_base', 'margin')
-        self.include_sections = kwargs.pop('include_sections', 0)  # 0, 1
-        self.repr_preact = kwargs.pop('repr_preact', 1)  # 0, 1
+        self.include_sections = kwargs.pop('include_sections', False)
+        self.repr_preact = kwargs.pop('repr_preact', True)
         self.alpha = kwargs.pop('alpha', 2.0)
 
         # Constants
