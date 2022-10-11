@@ -29,6 +29,7 @@ class Config:
         self.repr_size = kwargs.pop('repr_size', 1024)  # Size of dense representation layer for Contrastive Learning
         self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
         self.gradient_accumulation_steps = kwargs.pop('gradient_accumulation_steps', 1)
+        self.skip_early_eval = kwargs.pop('skip_early_eval', False)
 
         self.cross_validation = kwargs.pop('cross_validation', 'kfold')  # kfold, hyperparams
         self.num_k_fold = kwargs.pop('num_f_fold', 10)
@@ -41,6 +42,8 @@ class Config:
         self.classifier_dropout_prob = kwargs.pop('classifier_dropout_prob', 0.1)
         self.backbone_trainable_layers = kwargs.pop('backbone_trainable_layers', 0)
         self.loss_base = kwargs.pop('loss_base', 'margin')
+        self.include_sections = kwargs.pop('include_sections', 0)  # 0, 1
+        self.repr_preact = kwargs.pop('repr_preact', 1)  # 0, 1
         self.alpha = kwargs.pop('alpha', 2.0)
 
         # Constants

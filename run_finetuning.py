@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 
 from cort.config import Config
-from cort.modeling import CortModel
+from cort.modeling import CortModel, CortForElaboratedRepresentation
 from cort.optimization import LinearWarmUp, AdamWeightDecay, GradientAccumulator
 from cort.preprocessing import parse_and_preprocess_sentences, normalize_texts, run_multiprocessing_job
 from cort.pretrained import migrator, tokenization
@@ -115,64 +115,88 @@ def setup_datagen(config: Config):
                           return_attention_mask=False,
                           return_token_type_ids=False)
     input_ids = tokenized['input_ids']
+    sections = df['code_sections'].values
     labels = df['code_labels'].values
 
     input_ids = np.array(input_ids, dtype=np.int32)
+    sections = np.array(sections, dtype=np.int32)
     labels = np.array(labels, dtype=np.int32)
-    return input_ids, labels
+    return input_ids, (sections, labels)
 
 
 def splits_into_fold(config: Config, input_ids, labels):
+    sections, labels = labels
     fold = StratifiedKFold(n_splits=config.num_k_fold, shuffle=True, random_state=config.seed)
     for index, (train_indices, valid_indices) in enumerate(fold.split(input_ids, labels)):
         if index != config.current_fold:
             continue
 
         train_input_ids = input_ids[train_indices]
+        train_sections = sections[train_indices]
         train_labels = labels[train_indices]
         valid_input_ids = input_ids[valid_indices]
+        valid_sections = sections[valid_indices]
         valid_labels = labels[valid_indices]
 
         steps_per_epoch = len(train_input_ids) // config.batch_size // config.gradient_accumulation_steps
-        class_weights = compute_class_weight('balanced',
-                                             classes=np.unique(train_labels),
-                                             y=train_labels)
-        class_weights = dict(enumerate(class_weights))
+        sections_cw = compute_class_weight('balanced', classes=np.unique(train_sections), y=train_sections)
+        sections_cw = dict(enumerate(sections_cw))
+        labels_cw = compute_class_weight('balanced', classes=np.unique(train_labels), y=train_labels)
+        labels_cw = dict(enumerate(labels_cw))
+
         logging.info('Class weights:')
+        logging.info('- Sections:')
+        for i in range(config.num_sections):
+            logging.info('  - Section #{}: {}'.format(i, sections_cw[i]))
+        logging.info('- Labels:')
         for i in range(config.num_labels):
-            logging.info('- Label #{}: {}'.format(i, class_weights[i]))
+            logging.info('  - Label #{}: {}'.format(i, labels_cw[i]))
+
         FoldedDatasetOutput = collections.namedtuple('FoldedDatasetOutput', [
-            'training', 'validation',
-            'steps_per_epoch', 'class_weights'
+            'training', 'validation', 'steps_per_epoch',
+            'sections_cw', 'labels_cw'
         ])
-        return FoldedDatasetOutput(training=(train_input_ids, train_labels),
-                                   validation=(valid_input_ids, valid_labels),
+        return FoldedDatasetOutput(training=(train_input_ids, (train_sections, train_labels)),
+                                   validation=(valid_input_ids, (valid_sections, valid_labels)),
                                    steps_per_epoch=steps_per_epoch,
-                                   class_weights=class_weights)
+                                   sections_cw=sections_cw, labels_cw=labels_cw)
 
     raise ValueError('Invalid current fold number: {} out of total {} folds'
                      .format(config.current_fold, config.num_k_fold))
 
 
-def class_weight_map_fn(class_weight):
-    class_ids = list(sorted(class_weight.keys()))
-    expected_class_ids = list(range(len(class_ids)))
-    if class_ids != expected_class_ids:
-        raise ValueError((
-            'Expected `class_weight` to be a dict with keys from 0 to one less'
-            'than the number of classes, found {}'.format(class_weight)
-        ))
+def class_weight_map_fn(sections_cw, labels_cw):
+    def _calc_cw_tensor(cw):
+        class_ids = list(sorted(cw.keys()))
+        expected_class_ids = list(range(len(class_ids)))
+        if class_ids != expected_class_ids:
+            raise ValueError((
+                'Expected `class_weight` to be a dict with keys from 0 to one less'
+                'than the number of classes, found {}'.format(cw)
+            ))
 
-    class_weight_tensor = tf.convert_to_tensor([class_weight[int(c)] for c in class_ids])
+        return tf.convert_to_tensor([cw[int(c)] for c in class_ids])
 
-    def map_fn(input_ids, labels):
+    sections_cw_tensor = _calc_cw_tensor(sections_cw)
+    labels_cw_tensor = _calc_cw_tensor(labels_cw)
+
+    @tf.function
+    def _rearrange_cw(labels, cw_tensor):
         y_classes = smart_cond.smart_cond(
             labels.shape.rank == 2 and tf.shape(labels)[1] > 1,
             lambda: tf.argmax(labels, axis=1),
-            lambda: tf.cast(tf.reshape(labels, (-1,)), dtype=tf.int64)
+            lambda: tf.cast(tf.reshape(labels, (-1,)), dtype=tf.int32)
         )
-        cw = tf.gather(class_weight_tensor, y_classes)
-        return input_ids, labels, cw
+        cw = tf.gather(cw_tensor, y_classes)
+        return cw
+
+    @tf.function
+    def map_fn(input_ids, labels):
+        sections, labels = labels
+
+        sec_cw = _rearrange_cw(sections, sections_cw_tensor)
+        cw = _rearrange_cw(labels, labels_cw_tensor)
+        return input_ids, (sections, labels), (sec_cw, cw)
 
     return map_fn
 
@@ -186,7 +210,12 @@ def set_random_seed(seed):
 
 
 def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
-    model = CortModel(config)
+    # Build CoRT models
+    if config.include_sections:
+        model = CortForElaboratedRepresentation(config)
+    else:
+        model = CortModel(config)
+
     if config.restore_checkpoint:
         model.load_weights(config.restore_checkpoint)
     accumulator = GradientAccumulator()
@@ -208,6 +237,10 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
 
         key_to_depths['/seq_repr/'] = total_depth + 1
         key_to_depths['/bi_seq_repr/'] = total_depth + 1
+
+        # for elaborated representation model headings
+        key_to_depths['/sec_repr/'] = total_depth + 1
+        key_to_depths['/bi_sec_repr/'] = total_depth + 1
 
         return {
             key: decay_rate ** (total_depth + 1 - depth)
@@ -276,6 +309,16 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         metric_map['recall'] = metrics.Recall(name='recall')
         metric_map['micro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_labels, average='micro')
         metric_map['macro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_labels, average='macro')
+
+        # metrics for CoRT with elaborated representation
+        if config.include_sections:
+            metric_map['section_contrastive_loss'] = metrics.Mean(name='section_contrastive_loss')
+            metric_map['section_cross_entropy_loss'] = metrics.Mean(name='section_cross_entropy_loss')
+            metric_map['section_accuracy'] = metrics.CategoricalAccuracy(name='section_accuracy')
+            metric_map['section_precision'] = metrics.Precision(name='section_precision')
+            metric_map['section_recall'] = metrics.Recall(name='section_recall')
+            metric_map['section_micro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_sections, average='micro')
+            metric_map['section_macro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_sections, average='macro')
         return metric_map
 
     def metric_fn(dicts, model_outputs):
@@ -288,6 +331,15 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             dicts[key].update_state(
                 y_true=d['ohe_labels'],
                 y_pred=d['probs']
+            )
+        # metrics for CoRT with elaborated representation
+        dicts['section_contrastive_loss'].update_state(d['section_contrastive_loss'])
+        dicts['section_cross_entropy_loss'].update_state(d['section_cross_entropy_loss'])
+        confusion_keys = ['section_' + key for key in confusion_keys]
+        for key in confusion_keys:
+            dicts[key].update_state(
+                y_true=d['section_ohe_labels'],
+                y_pred=d['section_probs']
             )
         return dicts
 
@@ -324,10 +376,17 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         unscaled_loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, unscaled_loss, axis=None)
         return unscaled_loss, features
 
+    def wrap_inputs(inputs):
+        if config.include_sections:
+            return inputs
+
+        input_ids, (_, labels), (_, cw) = inputs
+        return input_ids, labels, cw
+
     @tf.function
     def train_step(inputs, take_step):
         with tf.GradientTape() as tape:
-            total_loss, outputs = model(list(inputs), training=True)
+            total_loss, outputs = model(wrap_inputs(inputs), training=True)
             unscaled_loss = tf.stop_gradient(total_loss)
         grads = tape.gradient(total_loss, model.trainable_variables)
 
@@ -354,7 +413,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
 
     @tf.function
     def test_step(inputs):
-        return model(list(inputs), training=False)
+        return model(wrap_inputs(inputs), training=False)
 
     @tf.function
     def distributed_test_step(inputs,):
@@ -392,8 +451,11 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         for key in metric_maps.keys():
             [metric.reset_state() for metric in metric_maps[key].values()]
 
-    # very first evaluate for initial metric results
-    evaluate(run_callback=False)
+    if not config.skip_early_eval:
+        # very first evaluate for initial metric results
+        evaluate(run_callback=False)
+    else:
+        logging.info('Skipping early evaluation')
 
     training_logs = None
     callback.on_train_begin()
@@ -476,13 +538,19 @@ def main():
         logging.info('Distributed Training Enabled')
         config.batch_size = config.batch_size * strategy.num_replicas_in_sync
 
+    if config.include_sections:
+        logging.info('Elaborated Representation Enabled')
+
+    if config.repr_preact:
+        logging.info('Pre-Activated Representation Enabled')
+
     set_random_seed(config.seed)
 
     input_ids, labels = setup_datagen(config)
     folded_output = splits_into_fold(config, input_ids, labels)
 
     train_dataset = tf.data.Dataset.from_tensor_slices(folded_output.training)
-    train_dataset = train_dataset.map(class_weight_map_fn(folded_output.class_weights))
+    train_dataset = train_dataset.map(class_weight_map_fn(folded_output.sections_cw, folded_output.labels_cw))
     train_dataset = train_dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
     train_dataset = train_dataset.batch(config.batch_size).shuffle(buffer_size=1024).repeat()
 
