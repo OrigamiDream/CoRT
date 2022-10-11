@@ -69,7 +69,7 @@ def parse_and_preprocess_sentences(filepath: str) -> pd.DataFrame:
         for title in titles:
             logging.info('- {}: {:,}'.format(title, stats[title]))
 
-    print_description('Section', SECTION_NAMES, df['sections'].value_counts())
+    print_description('Sections', SECTION_NAMES, df['sections'].value_counts())
     print_description('Labels', LABEL_NAMES, df['labels'].value_counts())
 
     return df
