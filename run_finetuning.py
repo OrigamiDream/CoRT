@@ -307,8 +307,12 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         metric_map['accuracy'] = metrics.CategoricalAccuracy(name='accuracy')
         metric_map['precision'] = metrics.Precision(name='precision')
         metric_map['recall'] = metrics.Recall(name='recall')
-        metric_map['micro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_labels, average='micro')
-        metric_map['macro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_labels, average='macro')
+        metric_map['micro_f1_score'] = metrics_tfa.F1Score(
+            num_classes=config.num_labels, average='micro', name='micro_f1_score'
+        )
+        metric_map['macro_f1_score'] = metrics_tfa.F1Score(
+            num_classes=config.num_labels, average='macro', name='macro_f1_score'
+        )
 
         # metrics for CoRT with elaborated representation
         if config.include_sections:
@@ -317,8 +321,12 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
             metric_map['section_accuracy'] = metrics.CategoricalAccuracy(name='section_accuracy')
             metric_map['section_precision'] = metrics.Precision(name='section_precision')
             metric_map['section_recall'] = metrics.Recall(name='section_recall')
-            metric_map['section_micro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_sections, average='micro')
-            metric_map['section_macro_f1_score'] = metrics_tfa.F1Score(num_classes=config.num_sections, average='macro')
+            metric_map['section_micro_f1_score'] = metrics_tfa.F1Score(
+                num_classes=config.num_sections, average='micro', name='section_micro_f1_score'
+            )
+            metric_map['section_macro_f1_score'] = metrics_tfa.F1Score(
+                num_classes=config.num_sections, average='macro', name='section_macro_f1_score'
+            )
         return metric_map
 
     def metric_fn(dicts, model_outputs):
