@@ -364,7 +364,7 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         'valid': create_metric_map()
     }
 
-    ckpt_file_name = 'CoRT-SWEEP_{}-RUN_{}-EPOCH_{}.h5'.format(wandb.run.sweep_id, wandb.run.id, '{epoch:02d}')
+    ckpt_file_name = 'CoRT_sweep-{}_run-{}_epoch-{}/'.format(wandb.run.sweep_id, wandb.run.id, '{epoch:02d}')
     # Callbacks
     callback_list = [
         wandb.keras.WandbModelCheckpoint(os.path.join('./models', ckpt_file_name),
