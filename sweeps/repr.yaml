@@ -55,3 +55,7 @@ parameters:
     distribution: int_uniform
     min: 1
     max: 6
+  concat_hidden_states:
+    distribution: int_uniform
+    int: 1
+    max: 4

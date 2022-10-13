@@ -42,6 +42,7 @@ class Config:
         self.repr_act = kwargs.pop('repr_act', 'tanh')
         self.classifier_dropout_prob = kwargs.pop('classifier_dropout_prob', 0.1)
         self.backbone_trainable_layers = kwargs.pop('backbone_trainable_layers', 0)
+        self.concat_hidden_states = kwargs.pop('concat_hidden_states', 1)
         self.loss_base = kwargs.pop('loss_base', 'margin')
         self.include_sections = kwargs.pop('include_sections', False)
         self.repr_preact = kwargs.pop('repr_preact', True)

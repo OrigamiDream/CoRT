@@ -116,8 +116,9 @@ class CortModel(models.Model):
         hidden_state = self.backbone(input_ids=input_ids,
                                      attention_mask=attention_mask,
                                      token_type_ids=token_type_ids,
+                                     output_hidden_states=True,
                                      training=training)
-        representation, logits = self.heading(hidden_state.last_hidden_state, training=training)
+        representation, logits = self.heading(hidden_state, training=training)
         BackboneOutput = collections.namedtuple('BackboneOutput', [
             'attention_mask', 'token_type_ids', 'hidden_state', 'representation', 'logits'
         ])
@@ -179,6 +180,7 @@ class CortForBidirectionalSequenceRepresentation(layers.Layer):
         self.bidirectional = None
         self.average_pool = self.max_pool = None
         self.concatenate = self.dropout = self.classifier = None
+        self.hidden_concatenate = None
 
     def build(self, input_shape):
         self.bidirectional = layers.Bidirectional(layer=layers.LSTM(64, return_sequences=True), name='bi_lstm')
@@ -190,12 +192,22 @@ class CortForBidirectionalSequenceRepresentation(layers.Layer):
         initializer_range = self.config.pretrained_config.initializer_range
         self.classifier = layers.Dense(self.num_labels, name='classifier',
                                        kernel_initializer=get_initializer(initializer_range))
+        if self.config.concat_hidden_states > 1:
+            self.hidden_concatenate = layers.Concatenate(name='hidden_concatenate')
         self.built = True
 
     def call(self, inputs, *args, **kwargs):
         training = kwargs['training'] if 'training' in kwargs else None
         prev_repr = kwargs['prev_repr'] if 'prev_repr' in kwargs else None
-        x = self.bidirectional(inputs, training=training)
+        if self.config.concat_hidden_states == 1:
+            hidden_state = inputs.last_hidden_state
+        else:
+            hidden_states = inputs.hidden_states
+            hidden_state = self.hidden_concatenate([
+                hidden_states[(idx + 1) * -1] for idx in range(self.config.concat_hidden_states)
+            ])
+
+        x = self.bidirectional(hidden_state, training=training)
 
         avg_pooled = self.average_pool(x, training=training)
         max_pooled = self.max_pool(x, training=training)
@@ -228,6 +240,7 @@ class CortForSequenceRepresentation(layers.Layer):
         self.repr = None
         self.dropout = None
         self.classifier = None
+        self.hidden_concatenate = None
         self.activation = None
 
     def build(self, input_shape):
@@ -239,14 +252,24 @@ class CortForSequenceRepresentation(layers.Layer):
                                        kernel_initializer=get_initializer(initializer_range))
         if self.config.repr_act != 'none':
             self.activation = layers.Activation(self.config.repr_act)
+        if self.config.concat_hidden_states > 1:
+            self.hidden_concatenate = layers.Concatenate(name='hidden_concatenate')
         self.built = True
 
     def call(self, inputs, *args, **kwargs):
         training = kwargs['training'] if 'training' in kwargs else None
         prev_repr = kwargs['prev_repr'] if 'prev_repr' in kwargs else None
 
+        if self.config.concat_hidden_states == 1:
+            hidden_state = inputs.last_hidden_state
+        else:
+            hidden_states = inputs.hidden_states
+            hidden_state = self.hidden_concatenate([
+                hidden_states[(idx + 1) * -1] for idx in range(self.config.concat_hidden_states)
+            ])
+
         # [CLS] token embedding
-        hidden_state = inputs[:, 0, :]  # transformer.last_hidden_state[:, 0, :]
+        hidden_state = hidden_state[:, 0, :]
         x = self.dropout(hidden_state, training=training)
         x = self.repr(x, training=training)
 
@@ -307,10 +330,11 @@ class CortForElaboratedRepresentation(models.Model):
         hidden_state = self.backbone(input_ids=input_ids,
                                      attention_mask=attention_mask,
                                      token_type_ids=token_type_ids,
+                                     output_hidden_states=True,
                                      training=training)
-        sec_repr, sec_logits = self.sections_heading(hidden_state.last_hidden_state, training=training)
+        sec_repr, sec_logits = self.sections_heading(hidden_state, training=training)
         representation, logits = self.labels_heading(
-            hidden_state.last_hidden_state, prev_repr=sec_repr, training=training
+            hidden_state, prev_repr=sec_repr, training=training
         )
         BackboneOutput = collections.namedtuple('BackboneOutput', [
             'attention_mask', 'token_type_ids', 'hidden_state',
