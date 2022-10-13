@@ -543,7 +543,8 @@ def main():
     logging.info('- Run ID: {}'.format(wandb.run.id))
 
     with tf.device('/device:GPU:{}'.format(config.gpu)) if config.gpu != 'all' else empty_context_manager():
-        strategy = tf.distribute.MirroredStrategy()
+        devices = ['GPU:{}'.format(config.gpu)] if config.gpu != 'all' else None
+        strategy = tf.distribute.MirroredStrategy(devices=devices)
         if config.distribute:
             logging.info('Distributed Training Enabled')
             config.batch_size = config.batch_size * strategy.num_replicas_in_sync
