@@ -542,39 +542,40 @@ def main():
     logging.info('- Sweep ID: {}'.format(wandb.run.sweep_id))
     logging.info('- Run ID: {}'.format(wandb.run.id))
 
-    strategy = tf.distribute.MirroredStrategy()
-    if config.distribute:
-        logging.info('Distributed Training Enabled')
-        config.batch_size = config.batch_size * strategy.num_replicas_in_sync
+    with tf.device('/device:GPU:{}'.format(config.gpu)) if config.gpu != 'all' else empty_context_manager():
+        strategy = tf.distribute.MirroredStrategy()
+        if config.distribute:
+            logging.info('Distributed Training Enabled')
+            config.batch_size = config.batch_size * strategy.num_replicas_in_sync
 
-    if config.include_sections:
-        logging.info('Elaborated Representation Enabled')
+        if config.include_sections:
+            logging.info('Elaborated Representation Enabled')
 
-    if config.repr_preact:
-        logging.info('Pre-Activated Representation Enabled')
+        if config.repr_preact:
+            logging.info('Pre-Activated Representation Enabled')
 
-    set_random_seed(config.seed)
+        set_random_seed(config.seed)
 
-    input_ids, labels = setup_datagen(config)
-    folded_output = splits_into_fold(config, input_ids, labels)
+        input_ids, labels = setup_datagen(config)
+        folded_output = splits_into_fold(config, input_ids, labels)
 
-    train_dataset = tf.data.Dataset.from_tensor_slices(folded_output.training)
-    train_dataset = train_dataset.map(class_weight_map_fn(folded_output.sections_cw, folded_output.labels_cw))
-    train_dataset = train_dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
-    train_dataset = train_dataset.batch(config.batch_size).shuffle(buffer_size=1024).repeat()
+        train_dataset = tf.data.Dataset.from_tensor_slices(folded_output.training)
+        train_dataset = train_dataset.map(class_weight_map_fn(folded_output.sections_cw, folded_output.labels_cw))
+        train_dataset = train_dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
+        train_dataset = train_dataset.batch(config.batch_size).shuffle(buffer_size=1024).repeat()
 
-    valid_dataset = tf.data.Dataset.from_tensor_slices(folded_output.validation)
-    valid_dataset = valid_dataset.batch(config.batch_size)
+        valid_dataset = tf.data.Dataset.from_tensor_slices(folded_output.validation)
+        valid_dataset = valid_dataset.batch(config.batch_size)
 
-    if config.distribute:
-        options = tf.data.Options()
-        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+        if config.distribute:
+            options = tf.data.Options()
+            options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
 
-        train_dataset = strategy.experimental_distribute_dataset(train_dataset.with_options(options))
-        valid_dataset = strategy.experimental_distribute_dataset(valid_dataset.with_options(options))
+            train_dataset = strategy.experimental_distribute_dataset(train_dataset.with_options(options))
+            valid_dataset = strategy.experimental_distribute_dataset(valid_dataset.with_options(options))
 
-    with strategy.scope() if config.distribute else empty_context_manager():
-        run_train(strategy, config, train_dataset, valid_dataset, folded_output.steps_per_epoch)
+        with strategy.scope() if config.distribute else empty_context_manager():
+            run_train(strategy, config, train_dataset, valid_dataset, folded_output.steps_per_epoch)
 
 
 if __name__ == '__main__':

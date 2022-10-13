@@ -11,6 +11,7 @@ class Config:
 
         # Training Hyperparameters
         self.seed = kwargs.pop('seed', 42)
+        self.gpu = kwargs.pop('gpu', 'all')
         self.batch_size = kwargs.pop('batch_size', 64)
         self.distribute = kwargs.pop('distribute', False)
         self.epochs = kwargs.pop('epochs', 10)
