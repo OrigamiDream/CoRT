@@ -553,7 +553,9 @@ def main():
         raise ValueError('No available GPUs')
 
     if config.gpu != 'all':
-        tf.config.set_visible_devices(gpus[int(config.gpu)], 'GPU')
+        desired_gpu = gpus[int(config.gpu)]
+        tf.config.set_visible_devices(desired_gpu, 'GPU')
+        tf.config.experimental.set_memory_growth(desired_gpu, True)
         logging.info('Restricting GPU as /device:GPU:{}'.format(config.gpu))
 
     strategy = tf.distribute.MirroredStrategy()
