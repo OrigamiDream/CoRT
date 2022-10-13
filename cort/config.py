@@ -31,6 +31,8 @@ class Config:
         self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
         self.gradient_accumulation_steps = kwargs.pop('gradient_accumulation_steps', 1)
         self.skip_early_eval = kwargs.pop('skip_early_eval', False)
+        self.word_mask_prob = kwargs.pop('word_mask_prob', 0.15)
+        self.dynamic_datagen = kwargs.pop('dynamic_datagen', True)
 
         self.cross_validation = kwargs.pop('cross_validation', 'kfold')  # kfold, hyperparams
         self.num_k_fold = kwargs.pop('num_f_fold', 10)

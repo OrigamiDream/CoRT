@@ -1,5 +1,6 @@
-import copy
 import os
+import math
+import copy
 import wandb
 import random
 import logging
@@ -10,6 +11,7 @@ import numpy as np
 import tensorflow as tf
 
 from cort.config import Config
+from cort.datagen import CortDataGenerator
 from cort.modeling import CortModel, CortForElaboratedRepresentation
 from cort.optimization import LinearWarmUp, AdamWeightDecay, GradientAccumulator
 from cort.preprocessing import parse_and_preprocess_sentences, normalize_texts, run_multiprocessing_job
@@ -98,9 +100,8 @@ def preprocess_sentences_on_batch(batch):
     return sentences
 
 
-def setup_datagen(config: Config):
+def setup_datagen(config: Config, tokenizer):
     df = parse_and_preprocess_sentences(config.train_path)
-    tokenizer = create_tokenizer_from_config(config)
 
     # preprocess in multiprocessing manner
     results = run_multiprocessing_job(preprocess_sentences_on_batch, df['sentences'],
@@ -109,22 +110,26 @@ def setup_datagen(config: Config):
     for sentences_batch in results:
         sentences += sentences_batch
 
-    tokenized = tokenizer(sentences,
-                          padding='max_length',
-                          truncation=True,
-                          return_attention_mask=False,
-                          return_token_type_ids=False)
-    input_ids = tokenized['input_ids']
+    if config.dynamic_datagen:
+        input_ids = np.array(sentences, dtype=np.object)
+    else:
+        tokenized = tokenizer(sentences,
+                              padding='max_length',
+                              truncation=True,
+                              return_attention_mask=False,
+                              return_token_type_ids=False)
+        input_ids = tokenized['input_ids']
+        input_ids = np.array(input_ids, dtype=np.int32)
+
     sections = df['code_sections'].values
     labels = df['code_labels'].values
 
-    input_ids = np.array(input_ids, dtype=np.int32)
     sections = np.array(sections, dtype=np.int32)
     labels = np.array(labels, dtype=np.int32)
     return input_ids, (sections, labels)
 
 
-def splits_into_fold(config: Config, input_ids, labels):
+def splits_into_fold(config: Config, tokenizer, input_ids, labels):
     sections, labels = labels
     fold = StratifiedKFold(n_splits=config.num_k_fold, shuffle=True, random_state=config.seed)
     for index, (train_indices, valid_indices) in enumerate(fold.split(input_ids, labels)):
@@ -144,6 +149,23 @@ def splits_into_fold(config: Config, input_ids, labels):
         labels_cw = compute_class_weight('balanced', classes=np.unique(train_labels), y=train_labels)
         labels_cw = dict(enumerate(labels_cw))
 
+        if config.dynamic_datagen:
+            training = CortDataGenerator(
+                config, tokenizer,
+                train_input_ids, train_sections, train_labels,
+                steps_per_epoch=len(train_input_ids) // config.batch_size,  # irrespective gradient accumulation steps
+                shuffle=True
+            )
+            validation = CortDataGenerator(
+                config, tokenizer,
+                valid_input_ids, valid_sections, valid_labels,
+                steps_per_epoch=int(math.ceil(len(valid_input_ids) / config.batch_size)),
+                shuffle=False
+            )
+        else:
+            training = (train_input_ids, (train_sections, train_labels))
+            validation = (valid_input_ids, (valid_sections, valid_labels))
+
         logging.info('Class weights:')
         logging.info('- Sections:')
         for i in range(config.num_sections):
@@ -156,8 +178,7 @@ def splits_into_fold(config: Config, input_ids, labels):
             'training', 'validation', 'steps_per_epoch',
             'sections_cw', 'labels_cw'
         ])
-        return FoldedDatasetOutput(training=(train_input_ids, (train_sections, train_labels)),
-                                   validation=(valid_input_ids, (valid_sections, valid_labels)),
+        return FoldedDatasetOutput(training=training, validation=validation,
                                    steps_per_epoch=steps_per_epoch,
                                    sections_cw=sections_cw, labels_cw=labels_cw)
 
@@ -571,16 +592,46 @@ def main():
 
     set_random_seed(config.seed)
 
-    input_ids, labels = setup_datagen(config)
-    folded_output = splits_into_fold(config, input_ids, labels)
+    tokenizer = create_tokenizer_from_config(config)
+    input_ids, labels = setup_datagen(config, tokenizer)
+    folded_output = splits_into_fold(config, tokenizer, input_ids, labels)
 
-    train_dataset = tf.data.Dataset.from_tensor_slices(folded_output.training)
+    def data_generator(datagen):
+        def _generator():
+            for i in range(datagen.steps_per_epoch):
+                yield datagen[i]
+
+        return _generator
+
+    output_signature = (
+        tf.TensorSpec((None, None), dtype=tf.int32, name='input_ids'),
+        (
+            tf.TensorSpec((None,), dtype=tf.int32, name='sections'),
+            tf.TensorSpec((None,), dtype=tf.int32, name='labels')
+        )
+    )
+    if config.dynamic_datagen:
+        train_dataset = tf.data.Dataset.from_generator(
+            generator=data_generator(folded_output.training),
+            output_signature=output_signature
+        )
+    else:
+        train_dataset = tf.data.Dataset.from_tensor_slices(folded_output.training)
+
     train_dataset = train_dataset.map(class_weight_map_fn(folded_output.sections_cw, folded_output.labels_cw))
     train_dataset = train_dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
-    train_dataset = train_dataset.batch(config.batch_size).shuffle(buffer_size=1024).repeat()
+    if not config.dynamic_datagen:
+        train_dataset = train_dataset.batch(config.batch_size)
+    train_dataset = train_dataset.shuffle(buffer_size=1024).repeat()
 
-    valid_dataset = tf.data.Dataset.from_tensor_slices(folded_output.validation)
-    valid_dataset = valid_dataset.batch(config.batch_size)
+    if config.dynamic_datagen:
+        valid_dataset = tf.data.Dataset.from_generator(
+            generator=data_generator(folded_output.validation),
+            output_signature=output_signature
+        )
+    else:
+        valid_dataset = tf.data.Dataset.from_tensor_slices(folded_output.validation)
+        valid_dataset = valid_dataset.batch(config.batch_size)
 
     if config.distribute:
         options = tf.data.Options()
