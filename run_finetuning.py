@@ -367,9 +367,9 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
     ckpt_file_name = 'CoRT-SWEEP_{}-RUN_{}.h5'.format(wandb.run.sweep_id, wandb.run.id)
     # Callbacks
     callback_list = [
-        callbacks.ModelCheckpoint(os.path.join('./models', ckpt_file_name),
-                                  monitor='val_total_loss',
-                                  verbose=1, save_best_only=True, save_weights_only=True),
+        wandb.keras.WandbModelCheckpoint(os.path.join('./models', ckpt_file_name),
+                                         monitor='val_total_loss',
+                                         verbose=1, save_best_only=True, save_weights_only=True),
         wandb.keras.WandbCallback()
     ]
     callback = callbacks.CallbackList(callbacks=callback_list,
