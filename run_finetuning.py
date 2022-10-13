@@ -556,8 +556,7 @@ def main():
         tf.config.set_visible_devices(gpus[int(config.gpu)], 'GPU')
         logging.info('Restricting GPU as /device:GPU:{}'.format(config.gpu))
 
-    devices = ['GPU:{}'.format(config.gpu)] if config.gpu != 'all' else None
-    strategy = tf.distribute.MirroredStrategy(devices=devices)
+    strategy = tf.distribute.MirroredStrategy()
     if config.distribute:
         logging.info('Distributed Training Enabled')
         config.batch_size = config.batch_size * strategy.num_replicas_in_sync
