@@ -389,8 +389,14 @@ def run_train(strategy, config, train_dataset, valid_dataset, steps_per_epoch):
         if config.include_sections:
             return inputs
 
-        input_ids, (_, labels), (_, cw) = inputs
-        return input_ids, labels, cw
+        if len(inputs) == 3:
+            input_ids, (_, labels), (_, cw) = inputs
+            return input_ids, labels, cw
+        elif len(inputs) == 2:
+            input_ids, (_, labels) = inputs
+            return input_ids, labels
+        else:
+            raise ValueError('Number of inputs must be 2 or 3. Received {} instead'.format(len(inputs)))
 
     @tf.function
     def train_step(inputs, take_step):
