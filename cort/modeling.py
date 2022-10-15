@@ -129,7 +129,7 @@ class CortForPretraining(models.Model):
         representation = self.projection(features)
 
         if self.config.loss_base == 'margin':
-            loss = calc_margin_based_contrastive_loss(representation, labels)
+            loss = calc_margin_based_contrastive_loss(representation, labels) * self.config.alpha
         elif self.config.loss_base == 'supervised':
             loss = calc_supervised_contrastive_loss(representation, labels)
         else:
