@@ -2,6 +2,7 @@ import os
 import wandb
 import logging
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 
 from utils import utils, formatting_utils
@@ -56,12 +57,13 @@ def parse_tfrecords(config: Config):
     return train_ds, valid_ds
 
 
-def analyze_representation(model, valid_dataset, val_metric):
+def analyze_representation(model, valid_dataset, val_metric, step):
+    num_eval_steps = sum([1 for _ in valid_dataset])
     representations = []
     labels = []
 
     # Evaluate the model on validation dataset
-    for index, inputs in enumerate(valid_dataset):
+    for index, inputs in enumerate(valid_dataset.take(num_eval_steps)):
         loss, eval_outputs = model(inputs, training=False)
 
         representations.append(eval_outputs['representation'].numpy())
@@ -77,14 +79,17 @@ def analyze_representation(model, valid_dataset, val_metric):
     embedding_size = representations.shape[1]
     columns = ['labels'] + ['embed_{}'.format(i) for i in range(embedding_size)]
     embeddings = np.concatenate([labels, representations], axis=-1)
+
+    df = pd.DataFrame(embeddings, columns=columns)
+    df['labels'] = df['labels'].astype(int).astype(str)
+
+    val_loss = val_metric.result().numpy()
     wandb.log({
-        'val_loss': val_metric.result().numpy(),
-        'representations': wandb.Table(
-            columns=columns,
-            data=embeddings
-        )
-    })
+        'val_loss': val_loss,
+        'representations': df
+    }, step=step)
     val_metric.reset_state()
+    return val_loss
 
 
 @tf.function
@@ -174,9 +179,9 @@ def main():
 
             # Reports metrics on W&B
             wandb.log({
-                'loss': metric.result().numpy(),
+                'loss': tf.reduce_mean(loss).numpy(),
                 'learning_rate': learning_rate_fn(num_steps)
-            })
+            }, step=step)
 
             if (step % config.log_freq == 0) and (num_steps % config.gradient_accumulation_steps == 0):
                 minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - start_time)
@@ -186,14 +191,21 @@ def main():
                             elapsed='{:02d}:{:02d}'.format(minutes, seconds))
                 )
                 metric.reset_state()
-                analyze_representation(model, valid_dataset, val_metric)
+                eval_start_time = utils.current_milliseconds()
+                eval_loss = analyze_representation(model, valid_dataset, val_metric, step)
+                minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - eval_start_time)
+                logging.info(
+                    ' * Evaluation Loss: {loss:10.6}, Time taken: {taken}'
+                    .format(loss=eval_loss,
+                            taken='{:02d}:{:02d}'.format(minutes, seconds))
+                )
 
             if num_steps % config.gradient_accumulation_steps == 0:
                 checkpoint.step.assign(int(optimizer.iterations))
 
             if num_steps % (config.save_checkpoint_steps * config.gradient_accumulation_steps) == 0:
                 manager.save(checkpoint_number=step)
-                logging.info('Saved model checkpoint for step: {}'.format(step))
+                logging.info(' * Saved model checkpoint for step: {}'.format(step))
 
             num_steps += 1
 
