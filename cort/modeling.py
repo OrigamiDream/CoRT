@@ -182,11 +182,7 @@ class CortMainLayer(layers.Layer):
     def __init__(self, config: ConfigLike, trainable=True, name=None, *args, **kwargs):
         super(CortMainLayer, self).__init__(trainable=trainable, name=name, *args, **kwargs)
         self.config = Config.parse_config(config)
-        self.backbone = None
-
-    def build(self, input_shape):
         self.backbone = configure_backbone_model(self.config)
-        self.built = True
 
     def call(self, input_ids, *args, **kwargs):
         training = kwargs['training'] if 'training' in kwargs else None
