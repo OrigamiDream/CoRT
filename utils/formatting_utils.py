@@ -2,7 +2,7 @@ import logging
 
 
 COLOR_DEFAULT = '\x1b[38;5;250m'
-COLOR_INFO = '\x1b[38;5;255m'
+COLOR_INFO = '\x1b[0m'
 COLOR_DEBUG = '\x1b[38;5;245m'
 COLOR_WARN = '\x1b[33;20m'
 COLOR_FATAL = '\x1b[31;20m'
