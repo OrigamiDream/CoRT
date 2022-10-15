@@ -6,6 +6,8 @@
 data/
 notebooks/
 wandb/
+models/
+checkpoints/
 cort/pretrained/korscibert
 cort/pretrained/korscielectra
 

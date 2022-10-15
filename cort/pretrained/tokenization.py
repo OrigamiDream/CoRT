@@ -73,7 +73,7 @@ class TokenizerDelegate:
         return return_value
 
 
-def create_tokenizer(vocab_file: str, tokenizer_type: str, do_lower_case=False, max_length=512):
+def create_tokenizer(vocab_file: str, tokenizer_type: str, do_lower_case=True, max_length=512):
     tokenizer_type = tokenizer_type.lower()
     if tokenizer_type == 'electra':
         try:

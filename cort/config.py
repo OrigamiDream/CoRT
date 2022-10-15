@@ -28,21 +28,28 @@ class Config:
         self.num_labels = kwargs.pop('num_labels', 9)
         self.num_sections = kwargs.pop('num_sections', 3)
         self.repr_size = kwargs.pop('repr_size', 1024)  # Size of dense representation layer for Contrastive Learning
-        self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
         self.gradient_accumulation_steps = kwargs.pop('gradient_accumulation_steps', 1)
         self.skip_early_eval = kwargs.pop('skip_early_eval', False)
         self.word_mask_prob = kwargs.pop('word_mask_prob', 0.15)
-        self.dynamic_datagen = kwargs.pop('dynamic_datagen', True)
+        self.dynamic_datagen = kwargs.pop('dynamic_datagen', False)
 
         self.cross_validation = kwargs.pop('cross_validation', 'kfold')  # kfold, hyperparams
         self.num_k_fold = kwargs.pop('num_f_fold', 10)
         self.current_fold = kwargs.pop('current_fold', 0)
         self.model_name = kwargs.pop('model_name', 'klue/roberta-base')
 
+        # Pre-training Hyperparameters
+        self.num_train_steps = kwargs.pop('num_train_steps', 1000000)
+        self.save_checkpoint_steps = kwargs.pop('save_checkpoint_steps', 1000)
+        self.keep_checkpoint_max = kwargs.pop('keep_checkpoint_max', 5)
+        self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
+        self.log_freq = kwargs.pop('log_freq', 2000)
+
         # Model Hyperparameters
         self.repr_classifier = kwargs.pop('repr_classifier', 'seq_cls')  # seq_cls, bi_lstm
         self.repr_act = kwargs.pop('repr_act', 'tanh')
         self.classifier_dropout_prob = kwargs.pop('classifier_dropout_prob', 0.1)
+        self.classifier_act = kwargs.pop('classifier_act', 'gelu')
         self.backbone_trainable_layers = kwargs.pop('backbone_trainable_layers', 0)
         self.concat_hidden_states = kwargs.pop('concat_hidden_states', 1)
         self.loss_base = kwargs.pop('loss_base', 'margin')
@@ -51,8 +58,11 @@ class Config:
         self.alpha = kwargs.pop('alpha', 2.0)
 
         # Constants
-        self.korscibert_ckpt = kwargs.pop('korscibert_ckpt',
-                                          './cort/pretrained/korscibert/model.ckpt-262500')
+        self.tfrecord_name = kwargs.pop('tfrecord_name',
+                                        './data/tfrecords/{model_name}/{scope}.fold-{index}-of-{fold}.tfrecord')
+        self.korscibert_vocab = kwargs.pop('korscibert_vocab', './cort/pretrained/korscibert/vocab_kisti.txt')
+        self.korscibert_ckpt = kwargs.pop('korscibert_ckpt', './cort/pretrained/korscibert/model.ckpt-262500')
+        self.korscielectra_vocab = kwargs.pop('korscielectra_vocab', './cort/pretrained/korscielectra/data/vocab.txt')
         self.korscielectra_ckpt = kwargs.pop('korscielectra_ckpt',
                                              './cort/pretrained/korscielectra/data/models/korsci_base')
         self.num_processes = kwargs.pop('num_processes', -1)

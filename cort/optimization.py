@@ -1,9 +1,86 @@
 import re
+import collections
 import tensorflow as tf
 
+from cort.config import ConfigLike
 from tensorflow.keras import optimizers
 from tensorflow.python.ops import control_flow_ops, math_ops, state_ops
 from tensorflow.python.training import training_ops
+from typing import Union, Callable
+
+
+def create_optimizer(config: ConfigLike, total_train_steps):
+    def _get_layer_decay(decay_rate, num_layers):
+        key_to_depths = collections.OrderedDict({
+            '/embedding/': 0,
+            '/embeddings/': 0,
+            '/embeddings_project/': 0
+        })
+        total_depth = 0
+        for layer in range(num_layers):
+            total_depth += 1
+            key_to_depths['/layer_._{}/'.format(layer)] = total_depth
+
+        key_to_depths['/projection/'] = total_depth + 1
+        key_to_depths['/classifier/'] = total_depth + 1
+
+        key_to_depths['/seq_repr/'] = total_depth + 1
+        key_to_depths['/bi_seq_repr/'] = total_depth + 1
+
+        # for elaborated representation model headings
+        key_to_depths['/sec_repr/'] = total_depth + 1
+        key_to_depths['/bi_sec_repr/'] = total_depth + 1
+
+        return {
+            key: decay_rate ** (total_depth + 1 - depth)
+            for key, depth in key_to_depths.items()
+        }
+
+    warmup_apical_steps = int(max(1, total_train_steps * config.warmup_rate))
+
+    if config.lr_fn == 'cosine_decay':
+        learning_rate_fn = optimizers.schedules.CosineDecayRestarts(
+            initial_learning_rate=config.learning_rate,
+            first_decay_steps=config.cosine_annealing_freq,
+            t_mul=1.0, m_mul=1.0
+        )
+    elif config.lr_fn == 'polynomial_decay':
+        learning_rate_fn = optimizers.schedules.PolynomialDecay(
+            initial_learning_rate=config.learning_rate,
+            decay_steps=total_train_steps - warmup_apical_steps,
+            end_learning_rate=0.0,
+            power=config.lr_poly_decay_power
+        )
+    elif config.lr_fn == 'linear_decay':
+        learning_rate_fn = optimizers.schedules.PolynomialDecay(
+            initial_learning_rate=config.learning_rate,
+            decay_steps=total_train_steps - warmup_apical_steps,
+            end_learning_rate=0.0,
+            power=1.0
+        )
+    else:
+        raise ValueError('Invalid learning rate function type:', config.lr_fn)
+
+    if config.warmup_rate:
+        learning_rate_fn = LinearWarmUp(
+            initial_learning_rate=config.learning_rate,
+            decay_schedule_fn=learning_rate_fn,
+            warmup_steps=warmup_apical_steps
+        )
+
+    layer_decay = None
+    if config.layerwise_lr_decay:
+        layer_decay = _get_layer_decay(config.layerwise_lr_decay, config.pretrained_config.num_hidden_layers)
+
+    optimizer = AdamWeightDecay(
+        learning_rate=learning_rate_fn,
+        weight_decay_rate=config.weight_decay,
+        layer_decay=layer_decay,
+        epsilon=1e-6,
+        exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm'],
+        clip_norm=config.optimizer_clip_norm
+    )
+    return optimizer, learning_rate_fn
 
 
 class LinearWarmUp(optimizers.schedules.LearningRateSchedule):
@@ -61,7 +138,7 @@ class AdamWeightDecay(optimizers.Adam):
 
     def __init__(
             self,
-            learning_rate=0.001,
+            learning_rate: Union[Callable, float] = 0.001,
             beta_1=0.9,
             beta_2=0.999,
             epsilon=1e-7,
