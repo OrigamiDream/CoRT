@@ -1,6 +1,7 @@
 import logging
 import tensorflow as tf
 
+from utils import utils
 from transformers import TFAutoModel
 from cort.config import Config, ConfigLike
 from cort.pretrained import migrator
@@ -85,10 +86,12 @@ def calc_supervised_contrastive_loss(pooled, labels):
 def configure_backbone_model(config: Config):
     if config.model_name == 'korscielectra':
         logging.info('Migrating KorSci-ELECTRA')
-        backbone = migrator.migrate_electra(config.korscielectra_ckpt)
+        vocab = utils.parse_vocabulary(config.korscielectra_vocab)
+        backbone = migrator.migrate_electra(config.korscielectra_ckpt, pad_token_id=vocab['[PAD]'])
     elif config.model_name == 'korscibert':
         logging.info('Migrating KorSci-BERT')
-        backbone = migrator.migrate_bert(config.korscibert_ckpt)
+        vocab = utils.parse_vocabulary(config.korscibert_vocab)
+        backbone = migrator.migrate_bert(config.korscibert_ckpt, pad_token_id=vocab['[PAD]'])
     else:
         logging.info('Loading `{}` from HuggingFace'.format(config.model_name))
         backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)

@@ -39,6 +39,13 @@ def create_tokenizer_from_config(config):
     return tokenizer
 
 
+def parse_vocabulary(vocab_filepath):
+    with open(vocab_filepath, 'r') as f:
+        texts = f.read().splitlines()
+        vocab = {text: index for index, text in enumerate(texts) if len(text) > 0}
+    return vocab
+
+
 def current_milliseconds():
     return round(time.time() * 1000)
 
@@ -64,11 +71,12 @@ def parse_arguments():
     args = parser.parse_args()
 
     config = Config(**vars(args))
-    tokenizer = create_tokenizer_from_config(config)
     if config.model_name == 'korscibert':
-        config.pretrained_config = migrator.create_base_bert_config(tokenizer=tokenizer)
+        vocab = parse_vocabulary(config.korscibert_vocab)
+        config.pretrained_config = migrator.create_base_bert_config(pad_token_id=vocab['[PAD]'])
     elif config.model_name == 'korscielectra':
-        config.pretrained_config = migrator.create_base_electra_config(tokenizer=tokenizer)
+        vocab = parse_vocabulary(config.korscielectra_vocab)
+        config.pretrained_config = migrator.create_base_electra_config(pad_token_id=vocab['[PAD]'])
     else:
         config.pretrained_config = AutoConfig.from_pretrained(config.model_name)
 

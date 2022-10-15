@@ -8,12 +8,7 @@ from transformers import TFElectraModel, ElectraConfig
 from transformers import TFBertModel, BertConfig
 
 
-def apply_vocabulary_to_config(config: Union[ElectraConfig, BertConfig], tokenizer):
-    config.pad_token_id = tokenizer.convert_tokens_to_ids(['[PAD]'])[0]
-    return config
-
-
-def create_base_bert_config(tokenizer=None):
+def create_base_bert_config(pad_token_id):
     config = BertConfig.from_pretrained('bert-base-uncased')
     config.attention_probs_dropout_prob = 0.1
     config.hidden_act = 'gelu'
@@ -26,21 +21,19 @@ def create_base_bert_config(tokenizer=None):
     config.num_hidden_layers = 12
     config.type_vocab_size = 2
     config.vocab_size = 15330
-    if tokenizer is not None:
-        config = apply_vocabulary_to_config(config, tokenizer)
+    config.pad_token_id = pad_token_id
     return config
 
 
-def create_base_electra_config(tokenizer=None):
+def create_base_electra_config(pad_token_id):
     config = ElectraConfig.from_pretrained('google/electra-base-discriminator')
     config.vocab_size = 16200
-    if tokenizer is not None:
-        config = apply_vocabulary_to_config(config, tokenizer)
+    config.pad_token_id = pad_token_id
     return config
 
 
-def create_base_electra(tokenizer=None):
-    config = create_base_electra_config(tokenizer=tokenizer)
+def create_base_electra(pad_token_id):
+    config = create_base_electra_config(pad_token_id)
     batch_size = 1
     eval_shape = (batch_size, config.max_position_embeddings)
     eval_inputs = {
@@ -53,8 +46,8 @@ def create_base_electra(tokenizer=None):
     return electra
 
 
-def create_base_bert(tokenizer=None):
-    config = create_base_bert_config(tokenizer=tokenizer)
+def create_base_bert(pad_token_id):
+    config = create_base_bert_config(pad_token_id)
     batch_size = 1
     eval_shape = (batch_size, config.max_position_embeddings)
     eval_inputs = {
@@ -81,14 +74,14 @@ def read_var_mappings(mapping_name):
     return mappings
 
 
-def migrate_electra(ckpt_dir_or_file, tokenizer=None):
-    electra = create_base_electra(tokenizer=tokenizer)
+def migrate_electra(ckpt_dir_or_file, pad_token_id):
+    electra = create_base_electra(pad_token_id)
     disallows = ['adam', 'generator', 'global_step', 'discriminator']
     return migrate_internal(electra, ckpt_dir_or_file, 'electra_mappings.txt', disallows)
 
 
-def migrate_bert(ckpt_dir_or_file, tokenizer=None):
-    bert = create_base_bert(tokenizer=tokenizer)
+def migrate_bert(ckpt_dir_or_file, pad_token_id):
+    bert = create_base_bert(pad_token_id)
     disallows = ['adam', 'global_step', 'good_steps', 'current_loss_scale', 'cls/']
     return migrate_internal(bert, ckpt_dir_or_file, 'bert_mappings.txt', disallows)
 
