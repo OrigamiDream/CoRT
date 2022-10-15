@@ -117,7 +117,7 @@ def main():
     utils.set_random_seed(config.seed)
 
     # Initialize W&B agent
-    run_name = 'CoRT_KFOLD-{}_BACKBONE-{}'.format(config.current_fold + 1, config.model_name)
+    run_name = 'fold-{}_{}_{}'.format(config.current_fold + 1, config.model_name, utils.generate_random_id())
     wandb.init(project='CoRT Pre-training', name=run_name)
 
     strategy = tf.distribute.MirroredStrategy()

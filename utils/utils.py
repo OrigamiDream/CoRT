@@ -16,6 +16,11 @@ def empty_context_manager():
     yield None
 
 
+def generate_random_id(length=8):
+    chars = 'abcdefghijklnmopqrstuvwxyz0123456789'
+    return ''.join([random.choice(chars) for i in range(length)])
+
+
 def set_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
