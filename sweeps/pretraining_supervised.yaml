@@ -6,6 +6,8 @@ metric:
   name: val_loss
   goal: minimize
 parameters:
+  batch_size:
+    value: 64
   repr_size:
     value: 1024
   repr_act:
@@ -41,7 +43,3 @@ parameters:
     distribution: uniform
     min: 0.0
     max: 0.01
-  batch_size:
-    values:
-      - 64
-      - 128
