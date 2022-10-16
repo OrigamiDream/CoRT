@@ -119,11 +119,13 @@ def train_one_step(config, model, optimizer, inputs, accumulator, take_step, cli
 def main():
     config = utils.parse_arguments()
     restrict_gpus(config)
-    utils.set_random_seed(config.seed)
 
     # Initialize W&B agent
     run_name = 'fold-{}_{}_{}'.format(config.current_fold + 1, config.model_name, utils.generate_random_id())
     wandb.init(project='CoRT Pre-training', name=run_name)
+
+    # Restricting random seed after setting W&B agents
+    utils.set_random_seed(config.seed)
 
     strategy = tf.distribute.MirroredStrategy()
     if config.distribute:
