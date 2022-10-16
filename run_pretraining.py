@@ -162,6 +162,7 @@ def main():
                             elapsed='{:02d}:{:02d}'.format(minutes, seconds))
                 )
                 metric.reset_state()
+                break
 
     # Finishing W&B agent
     wandb.finish()
