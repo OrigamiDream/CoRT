@@ -57,14 +57,19 @@ def parse_tfrecords(config: Config):
     return train_ds, valid_ds
 
 
+@tf.function
+def eval_one_step(model, inputs):
+    return model(inputs, training=False)
+
+
 def analyze_representation(model, valid_dataset, val_metric, step):
     num_eval_steps = sum([1 for _ in valid_dataset])
     representations = []
     labels = []
 
     # Evaluate the model on validation dataset
-    for index, inputs in enumerate(valid_dataset.take(num_eval_steps)):
-        loss, eval_outputs = model(inputs, training=False)
+    for inputs in valid_dataset.take(num_eval_steps):
+        loss, eval_outputs = eval_one_step(model, inputs)
 
         representations.append(eval_outputs['representation'].numpy())
         labels.append(eval_outputs['labels'].numpy())
