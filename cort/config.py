@@ -33,6 +33,7 @@ class Config:
         self.word_mask_prob = kwargs.pop('word_mask_prob', 0.15)
         self.dynamic_datagen = kwargs.pop('dynamic_datagen', False)
 
+        self.train_in_once = kwargs.pop('train_in_once', False)
         self.cross_validation = kwargs.pop('cross_validation', 'kfold')  # kfold, hyperparams
         self.num_k_fold = kwargs.pop('num_f_fold', 10)
         self.current_fold = kwargs.pop('current_fold', 0)
@@ -50,7 +51,6 @@ class Config:
         self.repr_classifier = kwargs.pop('repr_classifier', 'seq_cls')  # seq_cls, bi_lstm
         self.repr_act = kwargs.pop('repr_act', 'tanh')
         self.classifier_dropout_prob = kwargs.pop('classifier_dropout_prob', 0.1)
-        self.classifier_act = kwargs.pop('classifier_act', 'gelu')
         self.backbone_trainable_layers = kwargs.pop('backbone_trainable_layers', 0)
         self.concat_hidden_states = kwargs.pop('concat_hidden_states', 1)
         self.loss_base = kwargs.pop('loss_base', 'margin')

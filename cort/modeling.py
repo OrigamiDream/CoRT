@@ -122,12 +122,12 @@ class CortForPretraining(models.Model):
         self.projection = CortRepresentationProjectionHead(config, name='projection', **kwargs)
 
     def call(self, inputs, training=None, mask=None):
-        # TODO: _, (sections, _) is not yet supported (for hierarchical contrastive loss)
         input_ids, (_, labels) = inputs
         features = self.cort(input_ids, training=training)
         features = features.last_hidden_state[:, 0, :]
         representation = self.projection(features)
 
+        # TODO: Add support for Hierarchical Contrastive Loss
         if self.config.loss_base == 'margin':
             loss = calc_margin_based_contrastive_loss(representation, labels) * self.config.alpha
         elif self.config.loss_base == 'supervised':
@@ -144,6 +144,107 @@ class CortForPretraining(models.Model):
         return super(CortForPretraining, self).get_config()
 
 
+class CortForElaboratedSequenceClassification(models.Model):
+
+    def __init__(self, config: ConfigLike, num_sections: int, num_labels: int, **kwargs):
+        super(CortForElaboratedSequenceClassification, self).__init__(**kwargs)
+        assert config.train_in_once, (
+            'CoRT for elaborated sequence classification requires to enable `train_in_once`'
+        )
+
+        self.config = Config.parse_config(config)
+        self.num_sections = num_sections
+        self.num_labels = num_labels
+
+        self.cort = CortMainLayer(config, name='cort', **kwargs)
+        if self.config.repr_classifier == 'seq_cls':
+            self.section_classifier = CortClassificationHead(
+                config, intermediate_size=self.config.repr_size, num_labels=num_sections, name='section_classifier'
+            )
+            self.label_classifier = CortClassificationHead(
+                config, intermediate_size=self.config.repr_size, num_labels=num_labels, name='label_classifier'
+            )
+        elif self.config.repr_classifier == 'bi_lstm':
+            self.section_classifier = CortBidirectionalClassificationHead(
+                config, num_labels=num_sections, name='section_classifier'
+            )
+            self.label_classifier = CortBidirectionalClassificationHead(
+                config, num_labels=num_labels, name='label_classifier'
+            )
+        else:
+            raise ValueError('Invalid representation classifier: {}'.format(self.config.repr_classifier))
+        self.loss_fn = losses.SparseCategoricalCrossentropy(
+            from_logits=True, reduction=losses.Reduction.NONE
+        )
+
+    def compute_losses(self, representation, logits, labels, cw):
+        # TODO: Add support for Hierarchical Contrastive Loss
+        if labels is not None and self.config.loss_base == 'margin':
+            co_loss = calc_margin_based_contrastive_loss(representation, labels)
+        elif labels is not None and self.config.loss_base == 'supervised':
+            co_loss = calc_supervised_contrastive_loss(representation, labels)
+        elif labels is None:
+            co_loss = None
+        else:
+            raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
+
+        cce_loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
+        return co_loss, cce_loss
+
+    def call(self, inputs, training=None, mask=None):
+        input_ids, (sections, labels), (section_cw, label_cw) = unwrap_inputs_with_class_weight(inputs)
+
+        # One-Hot Encoding
+        section_ohe_labels = (
+            None if sections is None else tf.one_hot(sections, depth=self.num_sections, dtype=tf.float32)
+        )
+        ohe_labels = None if labels is None else tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
+
+        # Forward
+        outputs = self.cort(input_ids, training=training)
+        section_logits, section_representation = self.section_classifier(
+            outputs, training=training, return_representation=True
+        )
+        logits, representation = self.label_classifier(
+            outputs, training=training, return_representation=True, previous_representation=section_representation
+        )
+
+        section_probs = tf.cast(tf.nn.softmax(section_logits), dtype=tf.float32)
+        probs = tf.cast(tf.nn.softmax(logits), dtype=tf.float32)
+
+        cort_outputs = {
+            'labels': labels,
+            'logits': logits,
+            'probs': probs,
+            'ohe_labels': ohe_labels,
+            'section_labels': sections,
+            'section_logits': section_logits,
+            'section_probs': section_probs,
+            'section_ohe_labels': section_ohe_labels
+        }
+
+        # Compute Losses
+        total_loss = None
+        section_co_loss, section_cce_loss = self.compute_losses(
+            section_representation, section_logits, sections, section_cw
+        )
+        co_loss, cce_loss = self.compute_losses(representation, logits, labels, label_cw)
+        cort_outputs.update({
+            'section_co_loss': section_co_loss,
+            'section_cce_loss': section_cce_loss,
+            'co_loss': co_loss,
+            'cce_loss': cce_loss
+        })
+        if labels is not None:
+            total_loss = (
+                (section_cce_loss + (self.config.alpha * section_co_loss)) + (cce_loss + (self.config.alpha * co_loss))
+            )
+        return total_loss, cort_outputs
+
+    def get_config(self):
+        return super(CortForElaboratedSequenceClassification, self).get_config()
+
+
 class CortForSequenceClassification(models.Model):
 
     def __init__(self, config: ConfigLike, num_labels: int, **kwargs):
@@ -153,7 +254,12 @@ class CortForSequenceClassification(models.Model):
 
         self.cort = CortMainLayer(config, name='cort', **kwargs)
         if self.config.repr_classifier == 'seq_cls':
-            self.classifier = CortClassificationHead(config, num_labels=num_labels, name='classifier')
+            intermediate_size = (
+                self.config.repr_size if self.config.train_in_once else self.config.pretrained_config.hidden_size
+            )
+            self.classifier = CortClassificationHead(
+                config, intermediate_size=intermediate_size, num_labels=num_labels, name='classifier'
+            )
         elif self.config.repr_classifier == 'bi_lstm':
             self.classifier = CortBidirectionalClassificationHead(config, num_labels=num_labels, name='classifier')
         else:
@@ -164,18 +270,43 @@ class CortForSequenceClassification(models.Model):
 
     def call(self, inputs, training=None, mask=None):
         input_ids, (_, labels), (_, cw) = unwrap_inputs_with_class_weight(inputs)
-        outputs = self.cort(input_ids)
-        logits = self.classifier(outputs)
-        loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
+
+        # Forward
+        outputs = self.cort(input_ids, training=training)
+        logits, representation = self.classifier(outputs, training=training, return_representation=True)
 
         probs = tf.cast(tf.nn.softmax(logits), dtype=tf.float32)
+        ohe_labels = None if labels is None else tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
+
         cort_outputs = {
             'logits': logits,
             'probs': probs,
             'labels': labels,
-            'ohe_labels': None if labels is None else tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
+            'ohe_labels': ohe_labels
         }
-        return loss, cort_outputs
+
+        # Compute Losses
+        cce_loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
+
+        total_loss = cce_loss
+        if self.config.train_in_once:
+            # TODO: Add support for Hierarchical Contrastive Loss
+            if labels is not None and self.config.loss_base == 'margin':
+                co_loss = calc_margin_based_contrastive_loss(representation, labels)
+            elif labels is not None and self.config.loss_base == 'supervised':
+                co_loss = calc_supervised_contrastive_loss(representation, labels)
+            elif labels is None:
+                co_loss = None
+            else:
+                raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
+
+            total_loss = None if labels is None else cce_loss + (self.config.alpha * co_loss)
+            cort_outputs.update({
+                'co_loss': co_loss,
+                'cce_loss': cce_loss,
+                'representation': representation
+            })
+        return total_loss, cort_outputs
 
     def get_config(self):
         return super(CortForSequenceClassification, self).get_config()
@@ -258,9 +389,15 @@ class CortBidirectionalClassificationHead(layers.Layer):
             kernel_initializer=get_initializer(self.config.pretrained_config.initializer_range),
             name='classifier',
         )
+        self.activation = (
+            layers.Activation(self.config.repr_act, name='{}_act'.format(self.config.repr_act))
+            if self.config.repr_act != 'none' else None
+        )
 
     def call(self, inputs, *args, **kwargs):
         training = kwargs['training'] if 'training' in kwargs else None
+        return_representation = kwargs['return_representation'] if 'return_representation' in kwargs else None
+        previous_representation = kwargs['previous_representation'] if 'previous_representation' in kwargs else None
         if self.concat_hidden is not None:
             hidden_states = inputs.hidden_states
             hidden_state = self.concat_hidden([
@@ -276,8 +413,21 @@ class CortBidirectionalClassificationHead(layers.Layer):
 
         x = self.concatenate([avg_pooled, max_pooled], training=training)
         x = self.dropout(x, training=training)
+
+        # Representations
+        if previous_representation is not None:
+            x += previous_representation
+        if self.config.repr_preact and self.activation is not None:
+            x = self.activation(x)
+        representation = x
+        if not self.config.repr_preact and self.activation is not None:
+            x = self.activation(x)
+
         x = self.classifier(x, training=training)
-        return x
+        if return_representation:
+            return x, representation
+        else:
+            return x
 
     def get_config(self):
         config = super(CortBidirectionalClassificationHead, self).get_config()
@@ -290,20 +440,24 @@ class CortBidirectionalClassificationHead(layers.Layer):
 
 class CortClassificationHead(layers.Layer):
 
-    def __init__(self, config: ConfigLike, num_labels: int, **kwargs):
+    def __init__(self, config: ConfigLike, intermediate_size: int, num_labels: int, **kwargs):
         super(CortClassificationHead, self).__init__(**kwargs)
         self.config = Config.parse_config(config)
+        self.intermediate_size = intermediate_size
         self.num_labels = num_labels
 
         self.concat_hidden = (
             layers.Concatenate(name='concat_hidden') if config.concat_hidden_states > 1 else None
         )
         self.dense = layers.Dense(
-            config.pretrained_config.hidden_size,
+            intermediate_size,
             kernel_initializer=get_initializer(config.pretrained_config.initializer_range),
             name='dense'
         )
-        self.activation = layers.Activation(config.classifier_act, name='{}_act'.format(config.classifier_act))
+        self.activation = (
+            layers.Activation(self.config.repr_act, name='{}_act'.format(self.config.repr_act))
+            if self.config.repr_act != 'none' else None
+        )
         self.dropout = layers.Dropout(config.classifier_dropout_prob, name='dropout')
         self.classifier = layers.Dense(
             num_labels,
@@ -313,6 +467,8 @@ class CortClassificationHead(layers.Layer):
 
     def call(self, inputs, *args, **kwargs):
         training = kwargs['training'] if 'training' in kwargs else None
+        return_representation = kwargs['return_representation'] if 'return_representation' in kwargs else None
+        previous_representation = kwargs['previous_representation'] if 'previous_representation' in kwargs else None
         if self.concat_hidden is not None:
             hidden_states = inputs.hidden_states
             hidden_state = self.concat_hidden([
@@ -324,16 +480,29 @@ class CortClassificationHead(layers.Layer):
         x = hidden_state[:, 0, :]
         x = self.dropout(x, training=training)
         x = self.dense(x)
-        x = self.activation(x)
+
+        # Representations
+        if previous_representation is not None:
+            x += previous_representation
+        if self.config.repr_preact and self.activation is not None:
+            x = self.activation(x)
+        representation = x
+        if not self.config.repr_preact and self.activation is not None:
+            x = self.activation(x)
+
         x = self.dropout(x, training=training)
         x = self.classifier(x)
 
-        return x
+        if return_representation:
+            return x, representation
+        else:
+            return x
 
     def get_config(self):
         config = super(CortClassificationHead, self).get_config()
         config.update({
             'config': self.config.to_dict(),
+            'intermediate_size': self.intermediate_size,
             'num_labels': self.num_labels
         })
         return config

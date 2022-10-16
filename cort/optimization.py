@@ -21,15 +21,24 @@ def create_optimizer(config: ConfigLike, total_train_steps):
             total_depth += 1
             key_to_depths['/layer_._{}/'.format(layer)] = total_depth
 
-        key_to_depths['/projection/'] = total_depth + 1
-        key_to_depths['/classifier/'] = total_depth + 1
+        head_layers = [
+            # For CoRT Pretraining
+            '/projection/',
 
-        key_to_depths['/seq_repr/'] = total_depth + 1
-        key_to_depths['/bi_seq_repr/'] = total_depth + 1
+            # For CoRT sequence classification
+            '/classifier',
 
-        # for elaborated representation model headings
-        key_to_depths['/sec_repr/'] = total_depth + 1
-        key_to_depths['/bi_sec_repr/'] = total_depth + 1
+            # For CoRT elaborated sequence classification
+            '/section_classifier/', '/label_classifier/',
+
+            # For representation model heads
+            '/seq_repr/', '/bi_seq_repr/',
+
+            # For elaborated representation model heads
+            '/sec_repr/', '/bi_sec_repr/'
+        ]
+        for layer in head_layers:
+            key_to_depths[layer] = total_depth + 1
 
         return {
             key: decay_rate ** (total_depth + 1 - depth)
