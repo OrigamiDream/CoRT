@@ -39,11 +39,11 @@ class Config:
         self.model_name = kwargs.pop('model_name', 'klue/roberta-base')
 
         # Pre-training Hyperparameters
-        self.num_train_steps = kwargs.pop('num_train_steps', 1000000)
-        self.save_checkpoint_steps = kwargs.pop('save_checkpoint_steps', 1000)
-        self.keep_checkpoint_max = kwargs.pop('keep_checkpoint_max', 5)
+        self.num_train_steps = kwargs.pop('num_train_steps', 10000)
+        self.save_checkpoint_steps = kwargs.pop('save_checkpoint_steps', 100)
+        self.keep_checkpoint_max = kwargs.pop('keep_checkpoint_max', 3)
         self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
-        self.log_freq = kwargs.pop('log_freq', 2000)
+        self.log_freq = kwargs.pop('log_freq', 200)
 
         # Model Hyperparameters
         self.repr_classifier = kwargs.pop('repr_classifier', 'seq_cls')  # seq_cls, bi_lstm
