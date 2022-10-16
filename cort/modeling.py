@@ -58,7 +58,7 @@ def calc_margin_based_contrastive_loss(pooled, labels):
     mask_neg = (tf.expand_dims(labels, axis=1) != tf.expand_dims(labels, axis=0))
     mask_neg = tf.cast(mask_neg, dtype=tf.float32)
 
-    max_dist = tf.reduce_max(dist * mask_pos, axis=-1)
+    max_dist = tf.reduce_max(dist * mask_pos)
     loss_pos = tf.reduce_sum(dist * mask_pos, axis=-1) / (tf.reduce_sum(mask_pos, axis=-1) + 1e-3)
     loss_neg = tf.reduce_sum(tf.nn.relu(max_dist - dist) * mask_neg, axis=-1) / (tf.reduce_sum(mask_neg, axis=-1) + 1e-3)
     cos_loss = tf.reduce_mean(loss_pos + loss_neg)
@@ -163,7 +163,7 @@ class CortForSequenceClassification(models.Model):
         )
 
     def call(self, inputs, training=None, mask=None):
-        input_ids, labels, cw = unwrap_inputs_with_class_weight(inputs)
+        input_ids, (_, labels), (_, cw) = unwrap_inputs_with_class_weight(inputs)
         outputs = self.cort(input_ids)
         logits = self.classifier(outputs)
         loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
@@ -172,6 +172,7 @@ class CortForSequenceClassification(models.Model):
         cort_outputs = {
             'logits': logits,
             'probs': probs,
+            'labels': labels,
             'ohe_labels': None if labels is None else tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
         }
         return loss, cort_outputs

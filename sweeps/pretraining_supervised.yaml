@@ -23,9 +23,9 @@ parameters:
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    value: 0.01  # total 100 steps
+    value: 0.0125  # total 100 steps
   num_train_steps:
-    value: 10000  # total 10,000 steps without epochs
+    value: 8000  # total 8,000 steps without epochs
   model_name:
     values:
       - klue/roberta-base

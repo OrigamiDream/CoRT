@@ -38,7 +38,7 @@ def calc_margin_based_contrastive_loss(pooled, labels):
     mask_neg = (tf.expand_dims(labels, axis=1) != tf.expand_dims(labels, axis=0))
     mask_neg = tf.cast(mask_neg, dtype=tf.float32)
 
-    max_dist = tf.reduce_max(dist * mask_pos, axis=-1)
+    max_dist = tf.reduce_max(dist * mask_pos)
     loss_pos = tf.reduce_sum(dist * mask_pos, axis=-1) / (tf.reduce_sum(mask_pos, axis=-1) + 1e-3)
     loss_neg = tf.reduce_sum(tf.nn.relu(max_dist - dist) * mask_neg, axis=-1) / (tf.reduce_sum(mask_neg, axis=-1) + 1e-3)
     cos_loss = tf.reduce_mean(loss_pos + loss_neg)

@@ -5,56 +5,12 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-from utils import utils, formatting_utils
-from cort.config import Config
+from utils import utils, formatting_utils, dataset_utils
 from cort.modeling import CortForPretraining
 from cort.optimization import GradientAccumulator, create_optimizer
 from tensorflow.keras import metrics
 
 formatting_utils.setup_formatter()
-
-
-def restrict_gpus(config: Config):
-    gpus = tf.config.list_physical_devices('GPU')
-    if len(gpus) == 0:
-        logging.warning('No available GPUs')
-        return
-
-    if config.gpu != 'all':
-        desired_gpu = gpus[int(config.gpu)]
-        tf.config.set_visible_devices(desired_gpu, 'GPU')
-        logging.info('Restricting GPU as /device:GPU:{}'.format(config.gpu))
-
-
-def parse_tfrecords(config: Config):
-    maxlen = config.pretrained_config.max_position_embeddings
-    feature_desc = {
-        'input_ids': tf.io.FixedLenFeature([maxlen], tf.int64),
-        'sections': tf.io.FixedLenFeature([1], tf.int64),
-        'labels': tf.io.FixedLenFeature([1], tf.int64)
-    }
-
-    def _parse_feature_desc(example_proto):
-        example = tf.io.parse_single_example(example_proto, feature_desc)
-
-        # tf.int64 is acceptable, but tf.int32 has more performance advantages.
-        for name in list(example.keys()):
-            tensor = example[name]
-            if tensor.dtype == tf.int64:
-                tensor = tf.cast(tensor, tf.int32)
-            example[name] = tensor
-        return example
-
-    fname = config.tfrecord_name.format(
-        model_name=config.model_name.replace('/', '_'),
-        scope='{scope}',
-        index=config.current_fold + 1,
-        fold=config.num_k_fold
-    )
-    logging.info('Parsing TFRecords from {}'.format(fname))
-    train_ds = tf.data.TFRecordDataset(fname.format(scope='train')).map(_parse_feature_desc)
-    valid_ds = tf.data.TFRecordDataset(fname.format(scope='valid')).map(_parse_feature_desc)
-    return train_ds, valid_ds
 
 
 @tf.function
@@ -123,10 +79,10 @@ def train_one_step(config, model, optimizer, inputs, accumulator, take_step, cli
 
 def main():
     config = utils.parse_arguments()
-    restrict_gpus(config)
+    utils.restrict_gpus(config)
 
     # Initialize W&B agent
-    run_name = 'fold-{}_{}_{}'.format(config.current_fold + 1, config.model_name, utils.generate_random_id())
+    run_name = 'PT-{}_L-{}_I-{}'.format(config.model_name, config.loss_base, utils.generate_random_id())
     wandb.init(project='CoRT Pre-training', name=run_name)
 
     # Restricting random seed after setting W&B agents
@@ -136,25 +92,7 @@ def main():
     if config.distribute:
         logging.info('Distributed Training Enabled')
 
-    def _reshape_and_splits_example(example):
-        sections = tf.reshape(example['sections'], (-1,))
-        labels = tf.reshape(example['labels'], (-1,))
-        return example['input_ids'], (sections, labels)
-
-    train_dataset, valid_dataset = parse_tfrecords(config)
-    train_dataset = train_dataset.prefetch(buffer_size=tf.data.AUTOTUNE).batch(config.batch_size, drop_remainder=True)
-    train_dataset = train_dataset.map(_reshape_and_splits_example)
-    train_dataset = train_dataset.shuffle(buffer_size=1024).repeat()
-
-    valid_dataset = valid_dataset.batch(config.batch_size).map(_reshape_and_splits_example)
-
-    if config.distribute:
-        options = tf.data.Options()
-        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-
-        train_dataset = strategy.experimental_distribute_dataset(train_dataset.with_options(options))
-        valid_dataset = strategy.experimental_distribute_dataset(valid_dataset.with_options(options))
-
+    train_dataset, valid_dataset = dataset_utils.configure_tensorflow_dataset(config, strategy)
     with strategy.scope() if config.distribute else utils.empty_context_manager():
         model = CortForPretraining(config)
         accumulator = GradientAccumulator()
@@ -162,7 +100,7 @@ def main():
         metric = metrics.Mean(name='loss')
         val_metric = metrics.Mean(name='val_loss')
 
-        checkpoint_dir = os.path.join('./checkpoints', wandb.run.id)
+        checkpoint_dir = os.path.join('./pretraining-checkpoints', wandb.run.id)
         checkpoint = tf.train.Checkpoint(step=tf.Variable(0), optimizer=optimizer, model=model)
         manager = tf.train.CheckpointManager(checkpoint, checkpoint_dir, max_to_keep=config.keep_checkpoint_max)
         if config.restore_checkpoint and config.restore_checkpoint != 'latest':

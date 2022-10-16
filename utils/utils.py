@@ -1,6 +1,7 @@
 import os
 import time
 import random
+import logging
 import argparse
 import contextlib
 import numpy as np
@@ -18,7 +19,19 @@ def empty_context_manager():
 
 def generate_random_id(length=8):
     chars = 'abcdefghijklnmopqrstuvwxyz0123456789'
-    return ''.join([random.choice(chars) for i in range(length)])
+    return ''.join([random.choice(chars) for _ in range(length)])
+
+
+def restrict_gpus(config: Config):
+    gpus = tf.config.list_physical_devices('GPU')
+    if len(gpus) == 0:
+        logging.warning('No available GPUs')
+        return
+
+    if config.gpu != 'all':
+        desired_gpu = gpus[int(config.gpu)]
+        tf.config.set_visible_devices(desired_gpu, 'GPU')
+        logging.info('Restricting GPU as /device:GPU:{}'.format(config.gpu))
 
 
 def set_random_seed(seed):

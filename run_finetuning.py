@@ -11,7 +11,7 @@ from utils import utils
 from utils.formatting_utils import setup_formatter
 from cort.config import Config
 from cort.datagen import CortDataGenerator
-from cort.modeling_legacy import CortModel, CortForElaboratedRepresentation
+from cort.modeling_v1 import CortModel, CortForElaboratedRepresentation
 from cort.optimization import GradientAccumulator, create_optimizer
 from cort.preprocessing import parse_and_preprocess_sentences, normalize_texts, run_multiprocessing_job
 from tensorflow.keras import callbacks, metrics, utils
