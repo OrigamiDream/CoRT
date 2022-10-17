@@ -165,9 +165,7 @@ def main():
 
             num_steps += 1
 
-    # Finishing W&B agent
-    logging.info('Finishing W&B run')
-    wandb.finish()
+    logging.info('Finishing all jobs')
 
 
 if __name__ == '__main__':
