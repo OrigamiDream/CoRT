@@ -42,7 +42,34 @@ def unwrap_inputs_with_class_weight(inputs, include_sections=False):
     return input_ids, labels, cw
 
 
-def calc_margin_based_contrastive_loss(pooled, labels):
+def calc_hierarchical_contrastive_loss(pooled, sections, labels, temperature=0.07):
+    depth = 2  # Number of category depth = 2 (sections, labels)
+
+    hierarchy_masks = tf.ones((depth, depth), dtype=tf.float32)
+    hierarchy_masks = tf.linalg.band_part(hierarchy_masks, 0, -1)  # upper triangular matrix
+    hierarchy_masks = tf.stop_gradient(hierarchy_masks)
+
+    cumulative_losses = []
+    for level in range(depth):
+        section_co_loss = calc_supervised_contrastive_loss(pooled, sections, temperature=temperature)
+        label_co_loss = calc_supervised_contrastive_loss(pooled, labels, temperature=temperature)
+
+        co_losses = tf.concat([section_co_loss, label_co_loss], axis=0)
+        co_losses *= hierarchy_masks[level, :]
+        co_loss = tf.reduce_mean(co_losses)
+
+        # apply penalty to masked losses hierarchically
+        penalty = tf.pow(2, tf.Variable(1 / (level + 1)))
+        penalty = tf.stop_gradient(penalty)
+        co_loss *= penalty
+
+        cumulative_losses.append(co_loss)
+
+    cumulative_losses = tf.concat(cumulative_losses, axis=0)
+    return tf.reduce_mean(cumulative_losses)
+
+
+def calc_margin_based_contrastive_loss(pooled, labels, eps=1e-3):
     # Margin-based Contrastive Learning
 
     # ([B, 1, 1024] - [1, B, 1024])^2 = [B, B, 1024]
@@ -59,16 +86,16 @@ def calc_margin_based_contrastive_loss(pooled, labels):
     mask_neg = tf.cast(mask_neg, dtype=tf.float32)
 
     max_dist = tf.reduce_max(dist * mask_pos)
-    loss_pos = tf.reduce_sum(dist * mask_pos, axis=-1) / (tf.reduce_sum(mask_pos, axis=-1) + 1e-3)
-    loss_neg = tf.reduce_sum(tf.nn.relu(max_dist - dist) * mask_neg, axis=-1) / (tf.reduce_sum(mask_neg, axis=-1) + 1e-3)
+    loss_pos = tf.reduce_sum(dist * mask_pos, axis=-1) / (tf.reduce_sum(mask_pos, axis=-1) + eps)
+    loss_neg = tf.reduce_sum(tf.nn.relu(max_dist - dist) * mask_neg, axis=-1) / (tf.reduce_sum(mask_neg, axis=-1) + eps)
     cos_loss = tf.reduce_mean(loss_pos + loss_neg)
     return cos_loss
 
 
-def calc_supervised_contrastive_loss(pooled, labels):
+def calc_supervised_contrastive_loss(pooled, labels, temperature=0.3):
     # Supervised Contrastive Learning
     norm_pooled = tf.math.l2_normalize(pooled, axis=-1)
-    cosine_score = tf.matmul(norm_pooled, norm_pooled, transpose_b=True) / 0.3
+    cosine_score = tf.matmul(norm_pooled, norm_pooled, transpose_b=True) / temperature
     cosine_score = tf.exp(cosine_score)
     cosine_score = cosine_score - tf.linalg.diag(tf.linalg.diag_part(cosine_score))
 
@@ -122,16 +149,17 @@ class CortForPretraining(models.Model):
         self.projection = CortRepresentationProjectionHead(config, name='projection', **kwargs)
 
     def call(self, inputs, training=None, mask=None):
-        input_ids, (_, labels) = inputs
+        input_ids, (sections, labels) = inputs
         features = self.cort(input_ids, training=training)
         features = features.last_hidden_state[:, 0, :]
         representation = self.projection(features)
 
-        # TODO: Add support for Hierarchical Contrastive Loss
         if self.config.loss_base == 'margin':
             loss = calc_margin_based_contrastive_loss(representation, labels) * self.config.alpha
         elif self.config.loss_base == 'supervised':
             loss = calc_supervised_contrastive_loss(representation, labels)
+        elif self.config.loss_base == 'hierarchical':
+            loss = calc_hierarchical_contrastive_loss(representation, sections, labels)
         else:
             raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
         outputs = {
@@ -178,11 +206,12 @@ class CortForElaboratedSequenceClassification(models.Model):
         )
 
     def compute_losses(self, representation, logits, labels, cw):
-        # TODO: Add support for Hierarchical Contrastive Loss
         if labels is not None and self.config.loss_base == 'margin':
             co_loss = calc_margin_based_contrastive_loss(representation, labels)
         elif labels is not None and self.config.loss_base == 'supervised':
             co_loss = calc_supervised_contrastive_loss(representation, labels)
+        elif labels is not None and self.config.loss_base == 'hierarchical':
+            raise ValueError('Hierarchical contrastive loss is not supported in elaborated representation model')
         elif labels is None:
             co_loss = None
         else:
@@ -269,7 +298,7 @@ class CortForSequenceClassification(models.Model):
         )
 
     def call(self, inputs, training=None, mask=None):
-        input_ids, (_, labels), (_, cw) = unwrap_inputs_with_class_weight(inputs)
+        input_ids, (sections, labels), (_, cw) = unwrap_inputs_with_class_weight(inputs)
 
         # Forward
         outputs = self.cort(input_ids, training=training)
@@ -290,11 +319,12 @@ class CortForSequenceClassification(models.Model):
 
         total_loss = cce_loss
         if self.config.train_in_once:
-            # TODO: Add support for Hierarchical Contrastive Loss
             if labels is not None and self.config.loss_base == 'margin':
                 co_loss = calc_margin_based_contrastive_loss(representation, labels)
             elif labels is not None and self.config.loss_base == 'supervised':
                 co_loss = calc_supervised_contrastive_loss(representation, labels)
+            elif labels is not None and self.config.loss_base == 'hierarchical':
+                co_loss = calc_hierarchical_contrastive_loss(representation, sections, labels)
             elif labels is None:
                 co_loss = None
             else:
