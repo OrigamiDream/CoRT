@@ -53,17 +53,6 @@ def analyze_representation(model, valid_dataset, val_metric, step):
     return val_loss
 
 
-def evaluate_representation(model, valid_dataset, val_metric, step):
-    eval_start_time = utils.current_milliseconds()
-    eval_loss = analyze_representation(model, valid_dataset, val_metric, step)
-    minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - eval_start_time)
-    logging.info(
-        ' * Evaluation Loss: {loss:10.6}, Time taken: {taken}'
-        .format(loss=eval_loss,
-                taken='{:02d}:{:02d}'.format(minutes, seconds))
-    )
-
-
 @tf.function
 def train_one_step(config, model, optimizer, inputs, accumulator, take_step, clip_norm=1.0):
     # Forward and backprop
@@ -104,6 +93,7 @@ def main():
         logging.info('Distributed Training Enabled')
 
     train_dataset, valid_dataset = dataset_utils.configure_tensorflow_dataset(config, strategy)
+    train_iterator = iter(train_dataset)
     with strategy.scope() if config.distribute else utils.empty_context_manager():
         model = CortForPretraining(config)
         accumulator = GradientAccumulator()
@@ -125,10 +115,11 @@ def main():
 
         accumulator.reset()
         start_time = utils.current_milliseconds()
-        num_steps = int(checkpoint.step)
-        for inputs in train_dataset.skip(num_steps):
+        num_steps = 0
+        while int(checkpoint.step) <= config.num_train_steps:
             step = int(checkpoint.step)
-            take_step = (step == 0) or (step + 1) % config.gradient_accumulation_steps == 0
+            inputs = next(train_iterator)
+            take_step = (num_steps == 0) or (step + 1) % config.gradient_accumulation_steps == 0
 
             loss = train_one_step(config, model, optimizer, inputs, accumulator, take_step)
             metric.update_state(values=loss)
@@ -147,7 +138,23 @@ def main():
                             elapsed='{:02d}:{:02d}'.format(minutes, seconds))
                 )
                 metric.reset_state()
-                evaluate_representation(model, valid_dataset, val_metric, step)
+                eval_start_time = utils.current_milliseconds()
+                eval_loss = analyze_representation(model, valid_dataset, val_metric, step)
+                minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - eval_start_time)
+                logging.info(
+                    ' * Evaluation Loss: {loss:10.6}, Time taken: {taken}'
+                    .format(loss=eval_loss,
+                            taken='{:02d}:{:02d}'.format(minutes, seconds))
+                )
+
+            # Print allreduced metrics on the last step
+            if int(checkpoint.step) == config.num_train_steps and num_steps % config.gradient_accumulation_steps == 0:
+                minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - start_time)
+                logging.info(
+                    '<FINAL STEP METRICS> Step: {step:6d}, Loss: {loss:10.6f}, Elapsed: {elapsed}'
+                    .format(step=step, loss=metric.result().numpy(),
+                            elapsed='{:02d}:{:02d}'.format(minutes, seconds))
+                )
 
             if num_steps % config.gradient_accumulation_steps == 0:
                 checkpoint.step.assign(int(optimizer.iterations))
@@ -155,17 +162,6 @@ def main():
             if num_steps % (config.save_checkpoint_steps * config.gradient_accumulation_steps) == 0:
                 manager.save(checkpoint_number=step)
                 logging.info(' * Saved model checkpoint for step: {}'.format(step))
-
-            if step == config.num_train_steps:
-                minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - start_time)
-                logging.info(
-                    '<FINAL STEP METRICS> Step: {step:6d}, Loss: {loss:10.6f}, Elapsed: {elapsed}'
-                    .format(step=step, loss=metric.result().numpy(),
-                            elapsed='{:02d}:{:02d}'.format(minutes, seconds))
-                )
-                metric.reset_state()
-                evaluate_representation(model, valid_dataset, val_metric, step)
-                break
 
             num_steps += 1
 
