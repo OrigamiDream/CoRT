@@ -53,6 +53,17 @@ def analyze_representation(model, valid_dataset, val_metric, step):
     return val_loss
 
 
+def evaluate_representation(model, valid_dataset, val_metric, step):
+    eval_start_time = utils.current_milliseconds()
+    eval_loss = analyze_representation(model, valid_dataset, val_metric, step)
+    minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - eval_start_time)
+    logging.info(
+        ' * Evaluation Loss: {loss:10.6}, Time taken: {taken}'
+        .format(loss=eval_loss,
+                taken='{:02d}:{:02d}'.format(minutes, seconds))
+    )
+
+
 @tf.function
 def train_one_step(config, model, optimizer, inputs, accumulator, take_step, clip_norm=1.0):
     # Forward and backprop
@@ -136,14 +147,7 @@ def main():
                             elapsed='{:02d}:{:02d}'.format(minutes, seconds))
                 )
                 metric.reset_state()
-                eval_start_time = utils.current_milliseconds()
-                eval_loss = analyze_representation(model, valid_dataset, val_metric, step)
-                minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - eval_start_time)
-                logging.info(
-                    ' * Evaluation Loss: {loss:10.6}, Time taken: {taken}'
-                    .format(loss=eval_loss,
-                            taken='{:02d}:{:02d}'.format(minutes, seconds))
-                )
+                evaluate_representation(model, valid_dataset, val_metric, step)
 
             if num_steps % config.gradient_accumulation_steps == 0:
                 checkpoint.step.assign(int(optimizer.iterations))
@@ -160,14 +164,7 @@ def main():
                             elapsed='{:02d}:{:02d}'.format(minutes, seconds))
                 )
                 metric.reset_state()
-                eval_start_time = utils.current_milliseconds()
-                eval_loss = analyze_representation(model, valid_dataset, val_metric, step)
-                minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - eval_start_time)
-                logging.info(
-                    ' * Evaluation Loss: {loss:10.6}, Time taken: {taken}'
-                    .format(loss=eval_loss,
-                            taken='{:02d}:{:02d}'.format(minutes, seconds))
-                )
+                evaluate_representation(model, valid_dataset, val_metric, step)
                 break
 
             num_steps += 1
