@@ -125,7 +125,7 @@ def main():
             # Reports metrics on W&B
             wandb.log({
                 'loss': tf.reduce_mean(loss).numpy(),
-                'learning_rate': learning_rate_fn(num_steps)
+                'learning_rate': learning_rate_fn(step)
             }, step=step)
 
             if (step % config.log_freq == 0) and (num_steps % config.gradient_accumulation_steps == 0):
@@ -152,9 +152,7 @@ def main():
                 manager.save(checkpoint_number=step)
                 logging.info(' * Saved model checkpoint for step: {}'.format(step))
 
-            num_steps += 1
-
-            if num_steps == config.num_train_steps:
+            if step == config.num_train_steps:
                 minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - start_time)
                 logging.info(
                     '<FINAL STEP METRICS> Step: {step:6d}, Loss: {loss:10.6f}, Elapsed: {elapsed}'
@@ -162,9 +160,20 @@ def main():
                             elapsed='{:02d}:{:02d}'.format(minutes, seconds))
                 )
                 metric.reset_state()
+                eval_start_time = utils.current_milliseconds()
+                eval_loss = analyze_representation(model, valid_dataset, val_metric, step)
+                minutes, seconds = utils.format_minutes_and_seconds(utils.current_milliseconds() - eval_start_time)
+                logging.info(
+                    ' * Evaluation Loss: {loss:10.6}, Time taken: {taken}'
+                    .format(loss=eval_loss,
+                            taken='{:02d}:{:02d}'.format(minutes, seconds))
+                )
                 break
 
+            num_steps += 1
+
     # Finishing W&B agent
+    logging.info('Finishing W&B run')
     wandb.finish()
 
 
