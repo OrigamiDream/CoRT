@@ -33,7 +33,7 @@ class Config:
         self.word_mask_prob = kwargs.pop('word_mask_prob', 0.15)
         self.dynamic_datagen = kwargs.pop('dynamic_datagen', False)
 
-        self.train_in_once = kwargs.pop('train_in_once', False)
+        self.train_at_once = kwargs.pop('train_at_once', False)
         self.cross_validation = kwargs.pop('cross_validation', 'kfold')  # kfold, hyperparams
         self.num_k_fold = kwargs.pop('num_f_fold', 10)
         self.current_fold = kwargs.pop('current_fold', 0)
@@ -45,6 +45,9 @@ class Config:
         self.keep_checkpoint_max = kwargs.pop('keep_checkpoint_max', 3)
         self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
         self.checkpoint_dir = kwargs.pop('checkpoint_dir', '')
+        self.pretraining_checkpoint_dir = kwargs.pop('pretraining_checkpoint_dir',
+                                                     './pretraining-checkpoints/{run_name}')
+        self.pretraining_run_name = kwargs.pop('pretraining_run_name', '')
         self.log_freq = kwargs.pop('log_freq', 2000)
 
         # Model Hyperparameters

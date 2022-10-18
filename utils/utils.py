@@ -69,6 +69,20 @@ def format_minutes_and_seconds(milliseconds):
     return minutes, seconds
 
 
+def parse_pretrained_config(config):
+    if config.model_name == 'korscibert':
+        vocab = parse_vocabulary(config.korscibert_vocab)
+        pretrained_config = migrator.create_base_bert_config(pad_token_id=vocab['[PAD]'])
+    elif config.model_name == 'korscielectra':
+        vocab = parse_vocabulary(config.korscielectra_vocab)
+        pretrained_config = migrator.create_base_electra_config(pad_token_id=vocab['[PAD]'])
+    else:
+        pretrained_config = AutoConfig.from_pretrained(config.model_name)
+
+    pretrained_config.max_position_embeddings = min(512, pretrained_config.max_position_embeddings)
+    return pretrained_config
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     config = Config()
@@ -84,14 +98,5 @@ def parse_arguments():
     args = parser.parse_args()
 
     config = Config(**vars(args))
-    if config.model_name == 'korscibert':
-        vocab = parse_vocabulary(config.korscibert_vocab)
-        config.pretrained_config = migrator.create_base_bert_config(pad_token_id=vocab['[PAD]'])
-    elif config.model_name == 'korscielectra':
-        vocab = parse_vocabulary(config.korscielectra_vocab)
-        config.pretrained_config = migrator.create_base_electra_config(pad_token_id=vocab['[PAD]'])
-    else:
-        config.pretrained_config = AutoConfig.from_pretrained(config.model_name)
-
-    config.pretrained_config.max_position_embeddings = min(512, config.pretrained_config.max_position_embeddings)
+    config.pretrained_config = parse_pretrained_config(config)
     return config

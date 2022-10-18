@@ -1,0 +1,61 @@
+program: run_finetuning_v2.py
+project: CoRT Fine-tuning
+description: Bayes Search for CoRT Fine-tuning Hyperparameters from Scratch
+method: bayes
+metric:
+  name: val_accuracy
+  goal: maximize
+parameters:
+  batch_size:
+    value: 64
+  train_at_once:
+    value: True
+  repr_size:
+    value: 1024
+  repr_classifier:
+    values:
+      - seq_cls
+      - bi_lstm
+  repr_act:
+    values:
+      - none
+      - tanh
+      - swish
+      - gelu
+  loss_base:
+    values:
+      - margin
+      - supervised
+  backbone_trainable_layers:
+    value: -1  # unfreeze all backbone model parameters
+  lr_fn:
+    value: polynomial_decay
+  warmup_rate:
+    value: 0.06
+  epochs:
+    value: 10
+  model_name:
+    values:
+      - klue/roberta-base
+      - korscibert
+      - korscielectra
+  learning_rate:
+    distribution: uniform
+    min: 0.00001
+    max: 0.0001
+  layerwise_lr_decay:
+    distribution: uniform
+    min: 0.6
+    max: 1.0
+  weight_decay:
+    distribution: uniform
+    min: 0.0
+    max: 0.01
+  alpha:
+    distribution: uniform
+    min: 1.5
+    max: 4.0
+  concat_hidden_states:
+    distribution: int_uniform
+    min: 1
+    max: 4

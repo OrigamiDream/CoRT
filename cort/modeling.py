@@ -114,14 +114,14 @@ def configure_backbone_model(config: Config):
     if config.model_name == 'korscielectra':
         logging.info('Migrating KorSci-ELECTRA')
         vocab = utils.parse_vocabulary(config.korscielectra_vocab)
-        backbone = migrator.migrate_electra(config.korscielectra_ckpt, pad_token_id=vocab['[PAD]'])
+        backbone = migrator.migrate_electra(config.korscielectra_ckpt, pad_token_id=vocab['[PAD]'], name='backbone')
     elif config.model_name == 'korscibert':
         logging.info('Migrating KorSci-BERT')
         vocab = utils.parse_vocabulary(config.korscibert_vocab)
-        backbone = migrator.migrate_bert(config.korscibert_ckpt, pad_token_id=vocab['[PAD]'])
+        backbone = migrator.migrate_bert(config.korscibert_ckpt, pad_token_id=vocab['[PAD]'], name='backbone')
     else:
         logging.info('Loading `{}` from HuggingFace'.format(config.model_name))
-        backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)
+        backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True, name='backbone')
     backbone.trainable = False
 
     if config.backbone_trainable_layers > 0:
@@ -142,11 +142,18 @@ def configure_backbone_model(config: Config):
 
 class CortForPretraining(models.Model):
 
-    def __init__(self, config: ConfigLike, **kwargs):
-        super(CortForPretraining, self).__init__(**kwargs)
+    def __init__(self, config: ConfigLike, name=None, trainable=True, **kwargs):
+        super(CortForPretraining, self).__init__(name=name, trainable=trainable, **kwargs)
         self.config = Config.parse_config(config)
         self.cort = CortMainLayer(config, name='cort', **kwargs)
         self.projection = CortRepresentationProjectionHead(config, name='projection', **kwargs)
+        self.dummy_inputs = (
+            tf.zeros(shape=(1, self.config.pretrained_config.max_position_embeddings), dtype=tf.int32),
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            )
+        )
 
     def call(self, inputs, training=None, mask=None):
         input_ids, (sections, labels) = inputs
@@ -176,8 +183,11 @@ class CortForElaboratedSequenceClassification(models.Model):
 
     def __init__(self, config: ConfigLike, num_sections: int, num_labels: int, **kwargs):
         super(CortForElaboratedSequenceClassification, self).__init__(**kwargs)
-        assert config.train_in_once, (
-            'CoRT for elaborated sequence classification requires to enable `train_in_once`'
+        assert config.train_at_once, (
+            'CoRT for elaborated sequence classification requires to enable `train_at_once`'
+        )
+        assert config.include_sections, (
+            'CoRT for elaborated sequence classification requires to enable `include_sections`'
         )
 
         self.config = Config.parse_config(config)
@@ -203,6 +213,20 @@ class CortForElaboratedSequenceClassification(models.Model):
             raise ValueError('Invalid representation classifier: {}'.format(self.config.repr_classifier))
         self.loss_fn = losses.SparseCategoricalCrossentropy(
             from_logits=True, reduction=losses.Reduction.NONE
+        )
+        self.dummy_inputs = (
+            # input_ids
+            tf.zeros(shape=(1, self.config.pretrained_config.max_position_embeddings), dtype=tf.int32),
+            # sections, labels
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            ),
+            # class weights
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            )
         )
 
     def compute_losses(self, representation, logits, labels, cw):
@@ -242,10 +266,12 @@ class CortForElaboratedSequenceClassification(models.Model):
         probs = tf.cast(tf.nn.softmax(logits), dtype=tf.float32)
 
         cort_outputs = {
+            'representation': representation,
             'labels': labels,
             'logits': logits,
             'probs': probs,
             'ohe_labels': ohe_labels,
+            'section_representation': section_representation,
             'section_labels': sections,
             'section_logits': section_logits,
             'section_probs': section_probs,
@@ -284,7 +310,7 @@ class CortForSequenceClassification(models.Model):
         self.cort = CortMainLayer(config, name='cort', **kwargs)
         if self.config.repr_classifier == 'seq_cls':
             intermediate_size = (
-                self.config.repr_size if self.config.train_in_once else self.config.pretrained_config.hidden_size
+                self.config.repr_size if self.config.train_at_once else self.config.pretrained_config.hidden_size
             )
             self.classifier = CortClassificationHead(
                 config, intermediate_size=intermediate_size, num_labels=num_labels, name='classifier'
@@ -295,6 +321,20 @@ class CortForSequenceClassification(models.Model):
             raise ValueError('Invalid representation classifier: {}'.format(self.config.repr_classifier))
         self.loss_fn = losses.SparseCategoricalCrossentropy(
             from_logits=True, reduction=losses.Reduction.NONE
+        )
+        self.dummy_inputs = (
+            # input_ids
+            tf.zeros(shape=(1, self.config.pretrained_config.max_position_embeddings), dtype=tf.int32),
+            # sections, labels
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            ),
+            # class weights
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            )
         )
 
     def call(self, inputs, training=None, mask=None):
@@ -318,7 +358,7 @@ class CortForSequenceClassification(models.Model):
         cce_loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
 
         total_loss = cce_loss
-        if self.config.train_in_once:
+        if self.config.train_at_once:
             if labels is not None and self.config.loss_base == 'margin':
                 co_loss = calc_margin_based_contrastive_loss(representation, labels)
             elif labels is not None and self.config.loss_base == 'supervised':

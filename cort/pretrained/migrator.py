@@ -3,7 +3,6 @@ import os
 import numpy as np
 import tensorflow as tf
 
-from typing import Union
 from transformers import TFElectraModel, ElectraConfig
 from transformers import TFBertModel, BertConfig
 
@@ -32,7 +31,7 @@ def create_base_electra_config(pad_token_id):
     return config
 
 
-def create_base_electra(pad_token_id):
+def create_base_electra(pad_token_id, name=None):
     config = create_base_electra_config(pad_token_id)
     batch_size = 1
     eval_shape = (batch_size, config.max_position_embeddings)
@@ -41,12 +40,12 @@ def create_base_electra(pad_token_id):
         'attention_mask': np.zeros(eval_shape, dtype=np.int32),
         'token_type_ids': np.zeros(eval_shape, dtype=np.int32)
     }
-    electra = TFElectraModel(config)
+    electra = TFElectraModel(config, name=name)
     electra(**eval_inputs)  # callable
     return electra
 
 
-def create_base_bert(pad_token_id):
+def create_base_bert(pad_token_id, name=None):
     config = create_base_bert_config(pad_token_id)
     batch_size = 1
     eval_shape = (batch_size, config.max_position_embeddings)
@@ -55,7 +54,7 @@ def create_base_bert(pad_token_id):
         'attention_mask': np.zeros(eval_shape, dtype=np.int32),
         'token_type_ids': np.zeros(eval_shape, dtype=np.int32)
     }
-    bert = TFBertModel(config)
+    bert = TFBertModel(config, name=name)
     bert(**eval_inputs)  # callable
     return bert
 
@@ -74,14 +73,14 @@ def read_var_mappings(mapping_name):
     return mappings
 
 
-def migrate_electra(ckpt_dir_or_file, pad_token_id):
-    electra = create_base_electra(pad_token_id)
+def migrate_electra(ckpt_dir_or_file, pad_token_id, name=None):
+    electra = create_base_electra(pad_token_id, name=name)
     disallows = ['adam', 'generator', 'global_step', 'discriminator']
     return migrate_internal(electra, ckpt_dir_or_file, 'electra_mappings.txt', disallows)
 
 
-def migrate_bert(ckpt_dir_or_file, pad_token_id):
-    bert = create_base_bert(pad_token_id)
+def migrate_bert(ckpt_dir_or_file, pad_token_id, name=None):
+    bert = create_base_bert(pad_token_id, name=name)
     disallows = ['adam', 'global_step', 'good_steps', 'current_loss_scale', 'cls/']
     return migrate_internal(bert, ckpt_dir_or_file, 'bert_mappings.txt', disallows)
 
