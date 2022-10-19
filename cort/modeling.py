@@ -54,18 +54,17 @@ def calc_hierarchical_contrastive_loss(pooled, sections, labels, temperature=0.0
         section_co_loss = calc_supervised_contrastive_loss(pooled, sections, temperature=temperature)
         label_co_loss = calc_supervised_contrastive_loss(pooled, labels, temperature=temperature)
 
-        co_losses = tf.concat([section_co_loss, label_co_loss], axis=0)
+        co_losses = tf.stack([section_co_loss, label_co_loss], axis=0)
         co_losses *= hierarchy_masks[level, :]
         co_loss = tf.reduce_mean(co_losses)
 
         # apply penalty to masked losses hierarchically
-        penalty = tf.pow(2, tf.Variable(1 / (level + 1)))
-        penalty = tf.stop_gradient(penalty)
+        penalty = 2.0 ** (1 / (level + 1))
         co_loss *= penalty
 
         cumulative_losses.append(co_loss)
 
-    cumulative_losses = tf.concat(cumulative_losses, axis=0)
+    cumulative_losses = tf.stack(cumulative_losses, axis=0)
     return tf.reduce_mean(cumulative_losses)
 
 
