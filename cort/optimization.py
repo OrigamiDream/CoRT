@@ -9,7 +9,7 @@ from tensorflow.python.training import training_ops
 from typing import Union, Callable
 
 
-def create_optimizer(config: ConfigLike, total_train_steps, name=None):
+def create_optimizer(config: ConfigLike, total_train_steps):
     def _get_layer_decay(decay_rate, num_layers):
         key_to_depths = collections.OrderedDict({
             '/embedding/': 0,
@@ -87,8 +87,7 @@ def create_optimizer(config: ConfigLike, total_train_steps, name=None):
         layer_decay=layer_decay,
         epsilon=1e-6,
         exclude_from_weight_decay=['layer_norm', 'bias', 'LayerNorm'],
-        clip_norm=config.optimizer_clip_norm,
-        name=name
+        clip_norm=config.optimizer_clip_norm
     )
     return optimizer, learning_rate_fn
 

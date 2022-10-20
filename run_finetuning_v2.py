@@ -6,7 +6,6 @@ import pandas as pd
 import tensorflow as tf
 
 from cort.modeling import CortForSequenceClassification, CortForElaboratedSequenceClassification, CortForPretraining
-from cort.pretrained import migrator
 from cort.optimization import create_optimizer
 from utils import utils, formatting_utils, dataset_utils
 from tensorflow.keras import metrics
@@ -46,6 +45,14 @@ def create_scatter_representation_table(representations, labels):
     df['labels'] = df['labels'].astype(int).astype(str)
 
     return df
+
+
+def create_pretrained_replica(config, optimizer, ckpt_path):
+    replica = CortForPretraining(config)
+    replica(replica.dummy_inputs)
+    checkpoint = tf.train.Checkpoint(step=tf.Variable(0), optimizer=optimizer, model=replica)
+    checkpoint.restore(ckpt_path)  # unresolved optimizer variables warnings
+    return replica
 
 
 def create_metric_map(config):
@@ -169,14 +176,16 @@ def main():
             checkpoint.restore(config.restore_checkpoint)
             logging.info('Restored specified model checkpoint from {}'.format(config.checkpoint_dir))
         elif config.restore_checkpoint and config.pretraining_run_name:
+            title = '#### Restoring Pre-trained Models ####'
+            logging.info(title)
             if config.restore_checkpoint == 'latest':
                 checkpoint_path = tf.train.latest_checkpoint(config.checkpoint_dir)
             else:
                 checkpoint_path = os.path.join(config.checkpoint_dir, config.restore_checkpoint)
-            pretrained_replica = CortForPretraining(config, name='model')
-            pretrained_replica = migrator.restore_from_checkpoint(pretrained_replica, checkpoint_path)
+            pretrained_replica = create_pretrained_replica(config, optimizer, checkpoint_path)
             model.cort.set_weights(pretrained_replica.cort.get_weights())
             logging.info('Restored Pre-trained `{}` model from {}'.format(config.model_name, config.checkpoint_dir))
+            logging.info('#' * len(title))
         else:
             logging.info('Initializing from scratch')
 
