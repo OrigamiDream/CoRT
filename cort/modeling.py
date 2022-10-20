@@ -20,7 +20,7 @@ def get_initializer(initializer_range=0.02):
     return initializers.TruncatedNormal(stddev=initializer_range)
 
 
-def unwrap_inputs_with_class_weight(inputs, include_sections=False):
+def unwrap_inputs_with_class_weight(inputs):
     labels = cw = None
     if len(inputs) == 1:
         input_ids = inputs
@@ -31,13 +31,10 @@ def unwrap_inputs_with_class_weight(inputs, include_sections=False):
     else:
         raise ValueError('Number of inputs must be 1, 2 and 3')
 
-    if include_sections:
-        labels = (
-            (None, None) if labels is None else labels
-        )
-        cw = (
-            (None, None) if cw is None else cw
-        )
+    if labels is None:
+        labels = (None, None)
+    if cw is None:
+        cw = (None, None)
 
     return input_ids, labels, cw
 
