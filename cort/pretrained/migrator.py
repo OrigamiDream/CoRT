@@ -1,8 +1,11 @@
 import os
+import logging
 
 import numpy as np
 import tensorflow as tf
 
+from cort.config import Config
+from cort.modeling import CortForPretraining
 from transformers import TFElectraModel, ElectraConfig
 from transformers import TFBertModel, BertConfig
 
@@ -117,3 +120,71 @@ def migrate_internal(model, ckpt_dir_or_file, mapping_name, disallows):
         print('Following variables are not initialized: [{}]'.format(', '.join(unassigned_variable_names)))
 
     return model
+
+
+def restore_from_checkpoint(config: Config, ckpt_dir_or_file: str):
+    replica = CortForPretraining(config, name='model')
+    replica(replica.dummy_inputs)
+
+    disallows = ['optimizer/', 'save_counter/', 'step/', '_checkpointable_object_graph']
+
+    def _is_disallows(name):
+        for disallow in disallows:
+            if disallow in name:
+                return True
+        return False
+
+    def _preprocess_ckpt_var_name(ckpt_var_name):
+        orig = ckpt_var_name
+        ckpt_var_name = ckpt_var_name.replace('/.ATTRIBUTES/VARIABLE_VALUE', '')
+        ckpt_var_name = ckpt_var_name.replace('/attention/self_attention/', '/attention/self/')
+        ckpt_var_name = ckpt_var_name.replace('/attention/dense_output/', '/attention/output/')
+        ckpt_var_name = ckpt_var_name.replace('/bert_output/', '/output/')
+        ckpt_var_name = ckpt_var_name.replace('/embeddings/weight', '/embeddings/word_embeddings/weight')
+        ckpt_var_name = ckpt_var_name.replace('/embeddings/embeddings', '/embeddings/position_embeddings/embeddings')
+        ckpt_var_name = ckpt_var_name.replace(
+            '/embeddings/token_type_embeddings', '/embeddings/token_type_embeddings/embeddings'
+        )
+        return orig, ckpt_var_name
+
+    reader = tf.train.load_checkpoint(ckpt_dir_or_file)
+    shapes = reader.get_variable_to_shape_map()
+    ckpt_vars = []
+    for var_name, shape in shapes.items():
+        uncased_var_name = var_name.lower()
+        if _is_disallows(uncased_var_name):
+            continue
+        ckpt_vars.append((var_name, shape))
+    ckpt_var_names = [_preprocess_ckpt_var_name(ckpt_var[0]) for ckpt_var in ckpt_vars]
+
+    def _find_matching_variable(replica_var_name):
+        replica_var_name = replica_var_name.split(':')[0] if ':' in replica_var_name else replica_var_name
+        replica_var_name = replica_var_name.replace('layer_._', 'layer/')
+
+        # exceptional condition for `projection` in CortForPretraining
+        if 'model/' not in replica_var_name:
+            replica_var_name = 'model/cort/' + replica_var_name
+
+        for orig, ckpt_var_name in ckpt_var_names:
+            if replica_var_name == ckpt_var_name:
+                return orig
+        return None
+
+    invalid_var_names = []
+    for variable in replica.variables:
+        matched_ckpt_var_name = _find_matching_variable(variable.name)
+        if matched_ckpt_var_name is None:
+            invalid_var_names.append(variable.name)
+            continue
+
+        ckpt_var = tf.Variable(reader.get_tensor(matched_ckpt_var_name))
+        if ckpt_var.shape != variable.shape:
+            logging.warning('Variable shape mismatch: {}:{} <-> {}:{}'.format(
+                matched_ckpt_var_name, ckpt_var.shape, variable.shape, variable.name
+            ))
+        variable.assign(ckpt_var)
+
+    if len(invalid_var_names):
+        logging.warning('Unresolved replica model variables: [{}]'.format(', '.join(invalid_var_names)))
+
+    return replica

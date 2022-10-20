@@ -6,6 +6,7 @@ import pandas as pd
 import tensorflow as tf
 
 from cort.modeling import CortForSequenceClassification, CortForElaboratedSequenceClassification, CortForPretraining
+from cort.pretrained import migrator
 from cort.optimization import create_optimizer
 from utils import utils, formatting_utils, dataset_utils
 from tensorflow.keras import metrics
@@ -45,13 +46,6 @@ def create_scatter_representation_table(representations, labels):
     df['labels'] = df['labels'].astype(int).astype(str)
 
     return df
-
-
-def create_pretrained_replica(config, optimizer, ckpt_path):
-    replica = CortForPretraining(config)
-    checkpoint = tf.train.Checkpoint(step=tf.Variable(0), optimizer=optimizer, model=replica)
-    checkpoint.restore(ckpt_path).expect_partial()
-    return replica
 
 
 def create_metric_map(config):
@@ -149,18 +143,6 @@ def main():
     with strategy.scope() if config.distribute else utils.empty_context_manager():
         optimizer, learning_rate_fn = create_optimizer(config, total_train_steps)
 
-        # Preloading Pre-trained replica before initializing classification model
-        is_transfer_learning = config.restore_checkpoint and config.pretraining_run_name
-        if is_transfer_learning:
-            current_level = logging.getLogger().level
-            logging.getLogger().setLevel(logging.FATAL)  # silent logger when loading Pre-trained model
-            if config.restore_checkpoint == 'latest':
-                checkpoint_path = tf.train.latest_checkpoint(config.checkpoint_dir)
-            else:
-                checkpoint_path = os.path.join(config.checkpoint_dir, config.restore_checkpoint)
-            pretrained_replica = create_pretrained_replica(config, optimizer, checkpoint_path)
-            logging.getLogger().setLevel(current_level)
-
         if config.train_at_once and config.include_sections:
             logging.info('Training at Once, Including Sections → Elaborated Representation')
             model = CortForElaboratedSequenceClassification(
@@ -186,7 +168,12 @@ def main():
         elif config.restore_checkpoint and config.restore_checkpoint != 'latest' and not config.pretraining_run_name:
             checkpoint.restore(config.restore_checkpoint)
             logging.info('Restored specified model checkpoint from {}'.format(config.checkpoint_dir))
-        elif is_transfer_learning:
+        elif config.restore_checkpoint and config.pretraining_run_name:
+            if config.restore_checkpoint == 'latest':
+                checkpoint_path = tf.train.latest_checkpoint(config.checkpoint_dir)
+            else:
+                checkpoint_path = os.path.join(config.checkpoint_dir, config.restore_checkpoint)
+            pretrained_replica = migrator.restore_from_checkpoint(config, checkpoint_path)
             model.cort.set_weights(pretrained_replica.cort.get_weights())
             logging.info('Restored Pre-trained `{}` model from {}'.format(config.model_name, config.checkpoint_dir))
         else:
