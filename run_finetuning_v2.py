@@ -268,7 +268,7 @@ def main():
                     section_representations, sections
                 )
             # Reports evaluation results on W&B
-            wandb.log(wandb_logs, step=steps_per_epoch)
+            wandb.log(wandb_logs, step=num_steps)
 
             progbar.update(
                 current=steps_per_epoch,
