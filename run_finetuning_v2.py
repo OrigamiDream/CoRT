@@ -147,7 +147,7 @@ def main():
     total_train_steps = config.epochs * steps_per_epoch
     logging.info('Training steps_per_epoch: {}, total_train_steps: {}'.format(steps_per_epoch, total_train_steps))
     with strategy.scope() if config.distribute else utils.empty_context_manager():
-        optimizer, learning_rate_fn = create_optimizer(config, config.num_train_steps)
+        optimizer, learning_rate_fn = create_optimizer(config, total_train_steps)
 
         if config.train_at_once and config.include_sections:
             logging.info('Training at Once, Including Sections → Elaborated Representation')
