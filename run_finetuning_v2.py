@@ -173,7 +173,8 @@ def main():
                 checkpoint_path = tf.train.latest_checkpoint(config.checkpoint_dir)
             else:
                 checkpoint_path = os.path.join(config.checkpoint_dir, config.restore_checkpoint)
-            pretrained_replica = migrator.restore_from_checkpoint(config, checkpoint_path)
+            pretrained_replica = CortForPretraining(config, name='model')
+            pretrained_replica = migrator.restore_from_checkpoint(pretrained_replica, checkpoint_path)
             model.cort.set_weights(pretrained_replica.cort.get_weights())
             logging.info('Restored Pre-trained `{}` model from {}'.format(config.model_name, config.checkpoint_dir))
         else:

@@ -4,8 +4,6 @@ import logging
 import numpy as np
 import tensorflow as tf
 
-from cort.config import Config
-from cort.modeling import CortForPretraining
 from transformers import TFElectraModel, ElectraConfig
 from transformers import TFBertModel, BertConfig
 
@@ -122,9 +120,11 @@ def migrate_internal(model, ckpt_dir_or_file, mapping_name, disallows):
     return model
 
 
-def restore_from_checkpoint(config: Config, ckpt_dir_or_file: str):
-    replica = CortForPretraining(config, name='model')
-    replica(replica.dummy_inputs)
+def restore_from_checkpoint(replica, ckpt_dir_or_file: str):
+    assert replica.name == 'model', (
+        'Pre-trained replica model name must be `model`'
+    )
+    replica(replica.dummy_inputs)  # evaluate to compile model graphs
 
     disallows = ['optimizer/', 'save_counter/', 'step/', '_checkpointable_object_graph']
 
