@@ -231,7 +231,7 @@ def main():
 
                 acc = float(metric_maps['accuracy'].result().numpy())
                 if epoch == 0 and num_steps == 100 and acc < 0.3 and config.early_stop_slow_converge:
-                    logging.warning('The model is converging very slowly. {:.5f} < 0.5 at first step 200'.format(acc))
+                    logging.warning('The model is converging very slowly. {:.5f} < 0.5 at first 100 steps'.format(acc))
                     early_stopping = True
                     break
 
