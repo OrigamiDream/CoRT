@@ -149,6 +149,18 @@ def main():
     with strategy.scope() if config.distribute else utils.empty_context_manager():
         optimizer, learning_rate_fn = create_optimizer(config, total_train_steps)
 
+        # Preloading Pre-trained replica before initializing classification model
+        is_transfer_learning = config.restore_checkpoint and config.pretraining_run_name
+        if is_transfer_learning:
+            current_level = logging.getLogger().level
+            logging.getLogger().setLevel(logging.FATAL)  # silent logger when loading Pre-trained model
+            if config.restore_checkpoint == 'latest':
+                checkpoint_path = tf.train.latest_checkpoint(config.checkpoint_dir)
+            else:
+                checkpoint_path = os.path.join(config.checkpoint_dir, config.restore_checkpoint)
+            pretrained_replica = create_pretrained_replica(config, optimizer, checkpoint_path)
+            logging.getLogger().setLevel(current_level)
+
         if config.train_at_once and config.include_sections:
             logging.info('Training at Once, Including Sections → Elaborated Representation')
             model = CortForElaboratedSequenceClassification(
@@ -174,18 +186,8 @@ def main():
         elif config.restore_checkpoint and config.restore_checkpoint != 'latest' and not config.pretraining_run_name:
             checkpoint.restore(config.restore_checkpoint)
             logging.info('Restored specified model checkpoint from {}'.format(config.checkpoint_dir))
-        elif config.restore_checkpoint and config.pretraining_run_name:
-            current_level = logging.getLogger().level
-            logging.getLogger().setLevel(logging.FATAL)  # silent logger when loading Pre-trained model
-
-            if config.restore_checkpoint == 'latest':
-                checkpoint_path = tf.train.latest_checkpoint(config.checkpoint_dir)
-            else:
-                checkpoint_path = os.path.join(config.checkpoint_dir, config.restore_checkpoint)
-            pretrained_replica = create_pretrained_replica(config, optimizer, checkpoint_path)
+        elif is_transfer_learning:
             model.cort.set_weights(pretrained_replica.cort.get_weights())
-
-            logging.getLogger().setLevel(current_level)
             logging.info('Restored Pre-trained `{}` model from {}'.format(config.model_name, config.checkpoint_dir))
         else:
             logging.info('Initializing from scratch')
