@@ -177,6 +177,7 @@ def main():
             logging.info('Restored specified model checkpoint from {}'.format(config.checkpoint_dir))
         elif config.restore_checkpoint and config.pretraining_run_name:
             title = '#### Restoring Pre-trained Models ####'
+            logging.info('#' * len(title))
             logging.info(title)
             if config.restore_checkpoint == 'latest':
                 checkpoint_path = tf.train.latest_checkpoint(config.checkpoint_dir)
