@@ -1,4 +1,4 @@
-program: run_finetuning_v2.py
+program: run_finetuning.py
 project: CoRT Fine-tuning
 description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone
 method: grid
