@@ -1,13 +1,11 @@
 import logging
-import collections
-
 import tensorflow as tf
 
+from utils import utils
 from transformers import TFAutoModel
 from cort.config import Config, ConfigLike
 from cort.pretrained import migrator
 from tensorflow.keras import models, layers, losses, initializers
-from tensorflow.python.keras.utils import losses_utils
 
 
 def create_attention_mask(inputs, pad_token):
@@ -22,7 +20,52 @@ def get_initializer(initializer_range=0.02):
     return initializers.TruncatedNormal(stddev=initializer_range)
 
 
-def calc_margin_based_contrastive_loss(pooled, labels):
+def unwrap_inputs_with_class_weight(inputs):
+    labels = cw = None
+    if len(inputs) == 1:
+        input_ids = inputs
+    elif len(inputs) == 2:
+        input_ids, labels = inputs
+    elif len(inputs) == 3:
+        input_ids, labels, cw = inputs
+    else:
+        raise ValueError('Number of inputs must be 1, 2 and 3')
+
+    if labels is None:
+        labels = (None, None)
+    if cw is None:
+        cw = (None, None)
+
+    return input_ids, labels, cw
+
+
+def calc_hierarchical_contrastive_loss(pooled, sections, labels, temperature=0.07):
+    depth = 2  # Number of category depth = 2 (sections, labels)
+
+    hierarchy_masks = tf.ones((depth, depth), dtype=tf.float32)
+    hierarchy_masks = tf.linalg.band_part(hierarchy_masks, 0, -1)  # upper triangular matrix
+    hierarchy_masks = tf.stop_gradient(hierarchy_masks)
+
+    cumulative_losses = []
+    for level in range(depth):
+        section_co_loss = calc_supervised_contrastive_loss(pooled, sections, temperature=temperature)
+        label_co_loss = calc_supervised_contrastive_loss(pooled, labels, temperature=temperature)
+
+        co_losses = tf.stack([section_co_loss, label_co_loss], axis=0)
+        co_losses *= hierarchy_masks[level, :]
+        co_loss = tf.reduce_mean(co_losses)
+
+        # apply penalty to masked losses hierarchically
+        penalty = 2.0 ** (1 / (level + 1))
+        co_loss *= penalty
+
+        cumulative_losses.append(co_loss)
+
+    cumulative_losses = tf.stack(cumulative_losses, axis=0)
+    return tf.reduce_mean(cumulative_losses)
+
+
+def calc_margin_based_contrastive_loss(pooled, labels, eps=1e-3):
     # Margin-based Contrastive Learning
 
     # ([B, 1, 1024] - [1, B, 1024])^2 = [B, B, 1024]
@@ -38,17 +81,17 @@ def calc_margin_based_contrastive_loss(pooled, labels):
     mask_neg = (tf.expand_dims(labels, axis=1) != tf.expand_dims(labels, axis=0))
     mask_neg = tf.cast(mask_neg, dtype=tf.float32)
 
-    max_dist = tf.reduce_max(dist * mask_pos, axis=-1)
-    loss_pos = tf.reduce_sum(dist * mask_pos, axis=-1) / (tf.reduce_sum(mask_pos, axis=-1) + 1e-3)
-    loss_neg = tf.reduce_sum(tf.nn.relu(max_dist - dist) * mask_neg, axis=-1) / (tf.reduce_sum(mask_neg, axis=-1) + 1e-3)
+    max_dist = tf.reduce_max(dist * mask_pos)
+    loss_pos = tf.reduce_sum(dist * mask_pos, axis=-1) / (tf.reduce_sum(mask_pos, axis=-1) + eps)
+    loss_neg = tf.reduce_sum(tf.nn.relu(max_dist - dist) * mask_neg, axis=-1) / (tf.reduce_sum(mask_neg, axis=-1) + eps)
     cos_loss = tf.reduce_mean(loss_pos + loss_neg)
     return cos_loss
 
 
-def calc_supervised_contrastive_loss(pooled, labels):
+def calc_supervised_contrastive_loss(pooled, labels, temperature=0.3):
     # Supervised Contrastive Learning
     norm_pooled = tf.math.l2_normalize(pooled, axis=-1)
-    cosine_score = tf.matmul(norm_pooled, norm_pooled, transpose_b=True) / 0.3
+    cosine_score = tf.matmul(norm_pooled, norm_pooled, transpose_b=True) / temperature
     cosine_score = tf.exp(cosine_score)
     cosine_score = cosine_score - tf.linalg.diag(tf.linalg.diag_part(cosine_score))
 
@@ -66,13 +109,15 @@ def calc_supervised_contrastive_loss(pooled, labels):
 def configure_backbone_model(config: Config):
     if config.model_name == 'korscielectra':
         logging.info('Migrating KorSci-ELECTRA')
-        backbone = migrator.migrate_electra(config.korscielectra_ckpt)
+        vocab = utils.parse_vocabulary(config.korscielectra_vocab)
+        backbone = migrator.migrate_electra(config.korscielectra_ckpt, pad_token_id=vocab['[PAD]'], name='backbone')
     elif config.model_name == 'korscibert':
         logging.info('Migrating KorSci-BERT')
-        backbone = migrator.migrate_bert(config.korscibert_ckpt)
+        vocab = utils.parse_vocabulary(config.korscibert_vocab)
+        backbone = migrator.migrate_bert(config.korscibert_ckpt, pad_token_id=vocab['[PAD]'], name='backbone')
     else:
         logging.info('Loading `{}` from HuggingFace'.format(config.model_name))
-        backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True)
+        backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True, name='backbone')
     backbone.trainable = False
 
     if config.backbone_trainable_layers > 0:
@@ -91,25 +136,257 @@ def configure_backbone_model(config: Config):
     return backbone
 
 
-class CortModel(models.Model):
+class CortForPretraining(models.Model):
 
-    def __init__(self, config: ConfigLike, **kwargs):
-        super(CortModel, self).__init__(**kwargs)
+    def __init__(self, config: ConfigLike, name=None, trainable=True, **kwargs):
+        super(CortForPretraining, self).__init__(name=name, trainable=trainable, **kwargs)
+        self.config = Config.parse_config(config)
+        self.cort = CortMainLayer(config, name='cort', **kwargs)
+        self.projection = CortRepresentationProjectionHead(config, name='projection', **kwargs)
+        self.dummy_inputs = (
+            tf.zeros(shape=(1, self.config.pretrained_config.max_position_embeddings), dtype=tf.int32),
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            )
+        )
+
+    def call(self, inputs, training=None, mask=None):
+        input_ids, (sections, labels) = inputs
+        features = self.cort(input_ids, training=training)
+        features = features.last_hidden_state[:, 0, :]
+        representation = self.projection(features)
+
+        if self.config.loss_base == 'margin':
+            loss = calc_margin_based_contrastive_loss(representation, labels) * self.config.alpha
+        elif self.config.loss_base == 'supervised':
+            loss = calc_supervised_contrastive_loss(representation, labels)
+        elif self.config.loss_base == 'hierarchical':
+            loss = calc_hierarchical_contrastive_loss(representation, sections, labels)
+        else:
+            raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
+        outputs = {
+            'representation': representation,
+            'labels': labels
+        }
+        return loss, outputs
+
+    def get_config(self):
+        return super(CortForPretraining, self).get_config()
+
+
+class CortForElaboratedSequenceClassification(models.Model):
+
+    def __init__(self, config: ConfigLike, num_sections: int, num_labels: int, **kwargs):
+        super(CortForElaboratedSequenceClassification, self).__init__(**kwargs)
+        assert config.train_at_once, (
+            'CoRT for elaborated sequence classification requires to enable `train_at_once`'
+        )
+        assert config.include_sections, (
+            'CoRT for elaborated sequence classification requires to enable `include_sections`'
+        )
+
+        self.config = Config.parse_config(config)
+        self.num_sections = num_sections
+        self.num_labels = num_labels
+
+        self.cort = CortMainLayer(config, name='cort', **kwargs)
+        if self.config.repr_classifier == 'seq_cls':
+            self.section_classifier = CortClassificationHead(
+                config, intermediate_size=self.config.repr_size, num_labels=num_sections, name='section_classifier'
+            )
+            self.label_classifier = CortClassificationHead(
+                config, intermediate_size=self.config.repr_size, num_labels=num_labels, name='label_classifier'
+            )
+        elif self.config.repr_classifier == 'bi_lstm':
+            self.section_classifier = CortBidirectionalClassificationHead(
+                config, num_labels=num_sections, name='section_classifier'
+            )
+            self.label_classifier = CortBidirectionalClassificationHead(
+                config, num_labels=num_labels, name='label_classifier'
+            )
+        else:
+            raise ValueError('Invalid representation classifier: {}'.format(self.config.repr_classifier))
+        self.loss_fn = losses.SparseCategoricalCrossentropy(
+            from_logits=True, reduction=losses.Reduction.NONE
+        )
+        self.dummy_inputs = (
+            # input_ids
+            tf.zeros(shape=(1, self.config.pretrained_config.max_position_embeddings), dtype=tf.int32),
+            # sections, labels
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            ),
+            # class weights
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            )
+        )
+
+    def compute_losses(self, representation, logits, labels, cw):
+        if labels is not None and self.config.loss_base == 'margin':
+            co_loss = calc_margin_based_contrastive_loss(representation, labels)
+        elif labels is not None and self.config.loss_base == 'supervised':
+            co_loss = calc_supervised_contrastive_loss(representation, labels)
+        elif labels is not None and self.config.loss_base == 'hierarchical':
+            raise ValueError('Hierarchical contrastive loss is not supported in elaborated representation model')
+        elif labels is None:
+            co_loss = None
+        else:
+            raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
+
+        cce_loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
+        return co_loss, cce_loss
+
+    def call(self, inputs, training=None, mask=None):
+        input_ids, (sections, labels), (section_cw, label_cw) = unwrap_inputs_with_class_weight(inputs)
+
+        # One-Hot Encoding
+        section_ohe_labels = (
+            None if sections is None else tf.one_hot(sections, depth=self.num_sections, dtype=tf.float32)
+        )
+        ohe_labels = None if labels is None else tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
+
+        # Forward
+        outputs = self.cort(input_ids, training=training)
+        section_logits, section_representation = self.section_classifier(
+            outputs, training=training, return_representation=True
+        )
+        logits, representation = self.label_classifier(
+            outputs, training=training, return_representation=True, previous_representation=section_representation
+        )
+
+        section_probs = tf.cast(tf.nn.softmax(section_logits), dtype=tf.float32)
+        probs = tf.cast(tf.nn.softmax(logits), dtype=tf.float32)
+
+        cort_outputs = {
+            'representation': representation,
+            'labels': labels,
+            'logits': logits,
+            'probs': probs,
+            'ohe_labels': ohe_labels,
+            'section_representation': section_representation,
+            'section_labels': sections,
+            'section_logits': section_logits,
+            'section_probs': section_probs,
+            'section_ohe_labels': section_ohe_labels
+        }
+
+        # Compute Losses
+        total_loss = None
+        section_co_loss, section_cce_loss = self.compute_losses(
+            section_representation, section_logits, sections, section_cw
+        )
+        co_loss, cce_loss = self.compute_losses(representation, logits, labels, label_cw)
+        cort_outputs.update({
+            'section_co_loss': section_co_loss,
+            'section_cce_loss': section_cce_loss,
+            'co_loss': co_loss,
+            'cce_loss': cce_loss
+        })
+        if labels is not None:
+            total_loss = (
+                (section_cce_loss + (self.config.alpha * section_co_loss)) + (cce_loss + (self.config.alpha * co_loss))
+            )
+        return total_loss, cort_outputs
+
+    def get_config(self):
+        return super(CortForElaboratedSequenceClassification, self).get_config()
+
+
+class CortForSequenceClassification(models.Model):
+
+    def __init__(self, config: ConfigLike, num_labels: int, **kwargs):
+        super(CortForSequenceClassification, self).__init__(**kwargs)
+        self.config = Config.parse_config(config)
+        self.num_labels = num_labels
+
+        self.cort = CortMainLayer(config, name='cort', **kwargs)
+        if self.config.repr_classifier == 'seq_cls':
+            intermediate_size = (
+                self.config.repr_size if self.config.train_at_once else self.config.pretrained_config.hidden_size
+            )
+            self.classifier = CortClassificationHead(
+                config, intermediate_size=intermediate_size, num_labels=num_labels, name='classifier'
+            )
+        elif self.config.repr_classifier == 'bi_lstm':
+            self.classifier = CortBidirectionalClassificationHead(config, num_labels=num_labels, name='classifier')
+        else:
+            raise ValueError('Invalid representation classifier: {}'.format(self.config.repr_classifier))
+        self.loss_fn = losses.SparseCategoricalCrossentropy(
+            from_logits=True, reduction=losses.Reduction.NONE
+        )
+        self.dummy_inputs = (
+            # input_ids
+            tf.zeros(shape=(1, self.config.pretrained_config.max_position_embeddings), dtype=tf.int32),
+            # sections, labels
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            ),
+            # class weights
+            (
+                tf.zeros(shape=(1,), dtype=tf.int32),
+                tf.zeros(shape=(1,), dtype=tf.int32),
+            )
+        )
+
+    def call(self, inputs, training=None, mask=None):
+        input_ids, (sections, labels), (_, cw) = unwrap_inputs_with_class_weight(inputs)
+
+        # Forward
+        outputs = self.cort(input_ids, training=training)
+        logits, representation = self.classifier(outputs, training=training, return_representation=True)
+
+        probs = tf.cast(tf.nn.softmax(logits), dtype=tf.float32)
+        ohe_labels = None if labels is None else tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
+
+        cort_outputs = {
+            'logits': logits,
+            'probs': probs,
+            'labels': labels,
+            'ohe_labels': ohe_labels
+        }
+
+        # Compute Losses
+        cce_loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
+
+        total_loss = cce_loss
+        if self.config.train_at_once:
+            if labels is not None and self.config.loss_base == 'margin':
+                co_loss = calc_margin_based_contrastive_loss(representation, labels)
+            elif labels is not None and self.config.loss_base == 'supervised':
+                co_loss = calc_supervised_contrastive_loss(representation, labels)
+            elif labels is not None and self.config.loss_base == 'hierarchical':
+                co_loss = calc_hierarchical_contrastive_loss(representation, sections, labels)
+            elif labels is None:
+                co_loss = None
+            else:
+                raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
+
+            total_loss = None if labels is None else cce_loss + (self.config.alpha * co_loss)
+            cort_outputs.update({
+                'co_loss': co_loss,
+                'cce_loss': cce_loss,
+                'representation': representation
+            })
+        return total_loss, cort_outputs
+
+    def get_config(self):
+        return super(CortForSequenceClassification, self).get_config()
+
+
+class CortMainLayer(layers.Layer):
+
+    def __init__(self, config: ConfigLike, trainable=True, name=None, *args, **kwargs):
+        super(CortMainLayer, self).__init__(trainable=trainable, name=name, *args, **kwargs)
         self.config = Config.parse_config(config)
         self.backbone = configure_backbone_model(self.config)
 
-        if self.config.repr_classifier == 'seq_cls':
-            self.heading = CortForSequenceRepresentation(
-                config, config.num_labels, name='seq_repr'
-            )
-        elif self.config.repr_classifier == 'bi_lstm':
-            self.heading = CortForBidirectionalSequenceRepresentation(
-                config, config.num_labels, name='bi_seq_repr'
-            )
-        else:
-            raise ValueError('Invalid representation classification head: {}'.format(self.config.repr_classifier))
-
-    def compute_backbone_representation(self, input_ids, training=True):
+    def call(self, input_ids, *args, **kwargs):
+        training = kwargs['training'] if 'training' in kwargs else None
         attention_mask = tf.cast(tf.math.not_equal(input_ids, self.backbone.config.pad_token_id), dtype=tf.int32)
         token_type_ids = tf.zeros_like(input_ids, dtype=tf.int32)
 
@@ -118,111 +395,108 @@ class CortModel(models.Model):
                                      token_type_ids=token_type_ids,
                                      output_hidden_states=True,
                                      training=training)
-        representation, logits = self.heading(hidden_state, training=training)
-        BackboneOutput = collections.namedtuple('BackboneOutput', [
-            'attention_mask', 'token_type_ids', 'hidden_state', 'representation', 'logits'
-        ])
-        return BackboneOutput(attention_mask=attention_mask, token_type_ids=token_type_ids, hidden_state=hidden_state,
-                              representation=representation, logits=logits)
-
-    def call(self, inputs, training=None, mask_pos=None):
-        # input_ids shape must be [B, 512]
-        # labels shape must be [B,], which is not one-hot encoded.
-        if len(inputs) == 2:
-            input_ids, labels = inputs
-            class_weights = None
-        elif len(inputs) == 3:
-            input_ids, labels, class_weights = inputs
-        else:
-            raise ValueError(
-                'Number of inputs must be 2 or 3. 2 for [input_ids, labels] and 3 for [input_ids, labels, class_weight]'
-            )
-        outputs = self.compute_backbone_representation(input_ids, training=training)
-
-        # calculate losses
-        pooled = outputs.representation
-        logits = outputs.logits
-
-        if self.config.loss_base == 'margin':
-            cos_loss = calc_margin_based_contrastive_loss(pooled, labels)
-        elif self.config.loss_base == 'supervised':
-            cos_loss = calc_supervised_contrastive_loss(pooled, labels)
-        else:
-            raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
-
-        ohe_labels = tf.one_hot(labels, depth=self.config.num_labels, dtype=tf.float32)
-        cce_loss = tf.nn.softmax_cross_entropy_with_logits(ohe_labels, logits)
-        cce_loss = losses_utils.compute_weighted_loss(losses=cce_loss, sample_weight=class_weights,
-                                                      reduction=losses.Reduction.NONE)
-
-        total_loss = cce_loss + (self.config.alpha * cos_loss)
-
-        probs = tf.cast(tf.nn.softmax(logits), dtype=tf.float32)
-        cort_outputs = {
-            'probs': probs,
-            'ohe_labels': ohe_labels,
-            'contrastive_loss': cos_loss,
-            'cross_entropy_loss': cce_loss,
-        }
-        return total_loss, cort_outputs
+        return hidden_state
 
     def get_config(self):
-        return super(CortModel, self).get_config()
+        config = super(CortMainLayer, self).get_config()
+        config.update({
+            'config': self.config.to_dict()
+        })
+        return config
 
 
-class CortForBidirectionalSequenceRepresentation(layers.Layer):
+class CortRepresentationProjectionHead(layers.Layer):
 
-    def __init__(self, config: ConfigLike, num_labels: int, trainable=True, name=None, *args, **kwargs):
-        super(CortForBidirectionalSequenceRepresentation, self).__init__(trainable=trainable,
-                                                                         name=name, *args, **kwargs)
+    def __init__(self, config: ConfigLike, trainable=True, name=None, *args, **kwargs):
+        super(CortRepresentationProjectionHead, self).__init__(trainable=trainable, name=name, *args, **kwargs)
+        self.config = Config.parse_config(config)
+        self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')
+        self.repr = layers.Dense(self.config.repr_size,
+                                 kernel_initializer=get_initializer(self.config.pretrained_config.initializer_range),
+                                 name='repr')
+        self.activation = (
+            layers.Activation(self.config.repr_act, name='{}_act'.format(self.config.repr_act))
+            if self.config.repr_act != 'none' else None
+        )
+
+    def call(self, inputs, *args, **kwargs):
+        training = kwargs['training'] if 'training' in kwargs else None
+        x = self.dropout(inputs, training=training)
+        x = self.repr(x)
+        if self.activation:
+            x = self.activation(x)
+        return x
+
+    def get_config(self):
+        config = super(CortRepresentationProjectionHead, self).get_config()
+        config.update({
+            'config': self.config.to_dict()
+        })
+        return config
+
+
+class CortBidirectionalClassificationHead(layers.Layer):
+
+    def __init__(self, config: ConfigLike, num_labels: int, **kwargs):
+        super(CortBidirectionalClassificationHead, self).__init__(**kwargs)
         self.config = Config.parse_config(config)
         self.num_labels = num_labels
-        self.bidirectional = None
-        self.average_pool = self.max_pool = None
-        self.concatenate = self.dropout = self.classifier = None
-        self.hidden_concatenate = None
 
-    def build(self, input_shape):
+        self.concat_hidden = (
+            layers.Concatenate(name='concat_hidden') if config.concat_hidden_states > 1 else None
+        )
         self.bidirectional = layers.Bidirectional(layer=layers.LSTM(64, return_sequences=True), name='bi_lstm')
         self.average_pool = layers.GlobalAveragePooling1D(name='avg_pool')
         self.max_pool = layers.GlobalMaxPooling1D(name='max_pool')
         self.concatenate = layers.Concatenate(name='concatenate')
         self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')
-
-        initializer_range = self.config.pretrained_config.initializer_range
-        self.classifier = layers.Dense(self.num_labels, name='classifier',
-                                       kernel_initializer=get_initializer(initializer_range))
-        if self.config.concat_hidden_states > 1:
-            self.hidden_concatenate = layers.Concatenate(name='hidden_concatenate')
-        self.built = True
+        self.classifier = layers.Dense(
+            self.num_labels,
+            kernel_initializer=get_initializer(self.config.pretrained_config.initializer_range),
+            name='classifier',
+        )
+        self.activation = (
+            layers.Activation(self.config.repr_act, name='{}_act'.format(self.config.repr_act))
+            if self.config.repr_act != 'none' else None
+        )
 
     def call(self, inputs, *args, **kwargs):
         training = kwargs['training'] if 'training' in kwargs else None
-        prev_repr = kwargs['prev_repr'] if 'prev_repr' in kwargs else None
-        if self.config.concat_hidden_states == 1:
-            hidden_state = inputs.last_hidden_state
-        else:
+        return_representation = kwargs['return_representation'] if 'return_representation' in kwargs else None
+        previous_representation = kwargs['previous_representation'] if 'previous_representation' in kwargs else None
+        if self.concat_hidden is not None:
             hidden_states = inputs.hidden_states
-            hidden_state = self.hidden_concatenate([
+            hidden_state = self.concat_hidden([
                 hidden_states[(idx + 1) * -1] for idx in range(self.config.concat_hidden_states)
             ])
+        else:
+            hidden_state = inputs.last_hidden_state
 
         x = self.bidirectional(hidden_state, training=training)
 
         avg_pooled = self.average_pool(x, training=training)
         max_pooled = self.max_pool(x, training=training)
 
-        representation = self.concatenate([avg_pooled, max_pooled], training=training)
+        x = self.concatenate([avg_pooled, max_pooled], training=training)
+        x = self.dropout(x, training=training)
 
-        if prev_repr is not None:
-            representation += prev_repr
+        # Representations
+        if previous_representation is not None:
+            x += previous_representation
+        if self.config.repr_preact and self.activation is not None:
+            x = self.activation(x)
+        representation = x
+        if not self.config.repr_preact and self.activation is not None:
+            x = self.activation(x)
 
-        x = self.dropout(representation, training=training)
-        logits = self.classifier(x, training=training)
-        return representation, logits
+        x = self.classifier(x, training=training)
+        if return_representation:
+            return x, representation
+        else:
+            return x
 
     def get_config(self):
-        config = super(CortForBidirectionalSequenceRepresentation, self).get_config()
+        config = super(CortBidirectionalClassificationHead, self).get_config()
         config.update({
             'config': self.config.to_dict(),
             'num_labels': self.num_labels
@@ -230,184 +504,71 @@ class CortForBidirectionalSequenceRepresentation(layers.Layer):
         return config
 
 
-class CortForSequenceRepresentation(layers.Layer):
+class CortClassificationHead(layers.Layer):
 
-    def __init__(self, config: ConfigLike, num_labels: int, trainable=True, name=None, *args, **kwargs):
-        super(CortForSequenceRepresentation, self).__init__(trainable=trainable, name=name, *args, **kwargs)
-
+    def __init__(self, config: ConfigLike, intermediate_size: int, num_labels: int, **kwargs):
+        super(CortClassificationHead, self).__init__(**kwargs)
         self.config = Config.parse_config(config)
+        self.intermediate_size = intermediate_size
         self.num_labels = num_labels
-        self.repr = None
-        self.dropout = None
-        self.classifier = None
-        self.hidden_concatenate = None
-        self.activation = None
 
-    def build(self, input_shape):
-        initializer_range = self.config.pretrained_config.initializer_range
-        self.repr = layers.Dense(self.config.repr_size, name='repr',
-                                 kernel_initializer=get_initializer(initializer_range))
-        self.dropout = layers.Dropout(self.config.classifier_dropout_prob, name='dropout')
-        self.classifier = layers.Dense(self.num_labels, name='classifier',
-                                       kernel_initializer=get_initializer(initializer_range))
-        if self.config.repr_act != 'none':
-            self.activation = layers.Activation(self.config.repr_act)
-        if self.config.concat_hidden_states > 1:
-            self.hidden_concatenate = layers.Concatenate(name='hidden_concatenate')
-        self.built = True
+        self.concat_hidden = (
+            layers.Concatenate(name='concat_hidden') if config.concat_hidden_states > 1 else None
+        )
+        self.dense = layers.Dense(
+            intermediate_size,
+            kernel_initializer=get_initializer(config.pretrained_config.initializer_range),
+            name='dense'
+        )
+        self.activation = (
+            layers.Activation(self.config.repr_act, name='{}_act'.format(self.config.repr_act))
+            if self.config.repr_act != 'none' else None
+        )
+        self.dropout = layers.Dropout(config.classifier_dropout_prob, name='dropout')
+        self.classifier = layers.Dense(
+            num_labels,
+            kernel_initializer=get_initializer(config.pretrained_config.initializer_range),
+            name='classifier'
+        )
 
     def call(self, inputs, *args, **kwargs):
         training = kwargs['training'] if 'training' in kwargs else None
-        prev_repr = kwargs['prev_repr'] if 'prev_repr' in kwargs else None
-
-        if self.config.concat_hidden_states == 1:
-            hidden_state = inputs.last_hidden_state
-        else:
+        return_representation = kwargs['return_representation'] if 'return_representation' in kwargs else None
+        previous_representation = kwargs['previous_representation'] if 'previous_representation' in kwargs else None
+        if self.concat_hidden is not None:
             hidden_states = inputs.hidden_states
-            hidden_state = self.hidden_concatenate([
+            hidden_state = self.concat_hidden([
                 hidden_states[(idx + 1) * -1] for idx in range(self.config.concat_hidden_states)
             ])
-
-        # [CLS] token embedding
-        hidden_state = hidden_state[:, 0, :]
-        x = self.dropout(hidden_state, training=training)
-        x = self.repr(x, training=training)
-
-        # pre-activation
-        if self.activation is not None and self.config.repr_preact:
-            representation = self.activation(x)
         else:
-            representation = x
+            hidden_state = inputs.last_hidden_state
 
-        if prev_repr is not None:
-            representation += prev_repr
+        x = hidden_state[:, 0, :]
+        x = self.dropout(x, training=training)
+        x = self.dense(x)
 
-        # post-activation
-        if self.activation is not None and not self.config.repr_preact:
-            representation = self.activation(x)
+        # Representations
+        if previous_representation is not None:
+            x += previous_representation
+        if self.config.repr_preact and self.activation is not None:
+            x = self.activation(x)
+        representation = x
+        if not self.config.repr_preact and self.activation is not None:
+            x = self.activation(x)
 
-        x = self.dropout(representation, training=training)
-        logits = self.classifier(x, training=training)
+        x = self.dropout(x, training=training)
+        x = self.classifier(x)
 
-        return representation, logits
+        if return_representation:
+            return x, representation
+        else:
+            return x
 
     def get_config(self):
-        config = super(CortForSequenceRepresentation, self).get_config()
+        config = super(CortClassificationHead, self).get_config()
         config.update({
             'config': self.config.to_dict(),
+            'intermediate_size': self.intermediate_size,
             'num_labels': self.num_labels
-        })
-        return config
-
-
-class CortForElaboratedRepresentation(models.Model):
-
-    def __init__(self, config: ConfigLike, **kwargs):
-        super(CortForElaboratedRepresentation, self).__init__(**kwargs)
-        assert config.include_sections, '`include_sections` must be enabled for CortForStackedEmbedding models'
-        self.config = Config.parse_config(config)
-        self.backbone = configure_backbone_model(self.config)
-
-        if self.config.repr_classifier == 'seq_cls':
-            self.sections_heading = CortForSequenceRepresentation(
-                config, num_labels=config.num_sections, name='sec_repr'
-            )
-            self.labels_heading = CortForSequenceRepresentation(
-                config, num_labels=config.num_labels, name='seq_repr'
-            )
-        elif self.config.repr_classifier == 'bi_lstm':
-            self.sections_heading = CortForBidirectionalSequenceRepresentation(
-                config, num_labels=config.num_sections, name='bi_sec_repr'
-            )
-            self.labels_heading = CortForBidirectionalSequenceRepresentation(
-                config, num_labels=config.num_labels, name='bi_seq_repr'
-            )
-
-    def compute_backbone_representation(self, input_ids, training=True):
-        attention_mask = tf.cast(tf.math.not_equal(input_ids, self.backbone.config.pad_token_id), dtype=tf.int32)
-        token_type_ids = tf.zeros_like(input_ids, dtype=tf.int32)
-
-        hidden_state = self.backbone(input_ids=input_ids,
-                                     attention_mask=attention_mask,
-                                     token_type_ids=token_type_ids,
-                                     output_hidden_states=True,
-                                     training=training)
-        sec_repr, sec_logits = self.sections_heading(hidden_state, training=training)
-        representation, logits = self.labels_heading(
-            hidden_state, prev_repr=sec_repr, training=training
-        )
-        BackboneOutput = collections.namedtuple('BackboneOutput', [
-            'attention_mask', 'token_type_ids', 'hidden_state',
-            'section_representation', 'representation', 'section_logits', 'logits'
-        ])
-        return BackboneOutput(
-            attention_mask=attention_mask, token_type_ids=token_type_ids, hidden_state=hidden_state,
-            section_representation=sec_repr, representation=representation,
-            section_logits=sec_logits, logits=logits
-        )
-
-    def calc_representation_losses(self, representation, logits, targets, num_targets, cw):
-        if self.config.loss_base == 'margin':
-            cos_loss = calc_margin_based_contrastive_loss(representation, targets)
-        elif self.config.loss_base == 'supervised':
-            cos_loss = calc_supervised_contrastive_loss(representation, targets)
-        else:
-            raise ValueError('Invalid contrastive loss base: {}'.format(self.config.loss_base))
-
-        ohe_labels = tf.one_hot(targets, depth=num_targets, dtype=tf.float32)
-        cce_loss = tf.nn.softmax_cross_entropy_with_logits(ohe_labels, logits)
-        cce_loss = losses_utils.compute_weighted_loss(
-            losses=cce_loss, sample_weight=cw, reduction=losses.Reduction.NONE
-        )
-        RepresentationLoss = collections.namedtuple('RepresentationLoss', [
-            'contrastive_loss', 'cross_entropy_loss', 'ohe_labels'
-        ])
-        return RepresentationLoss(
-            contrastive_loss=cos_loss, cross_entropy_loss=cce_loss, ohe_labels=ohe_labels
-        )
-
-    def call(self, inputs, training=None, mask=None):
-        if len(inputs) == 2:
-            input_ids, (sections, labels) = inputs
-            sections_cw = labels_cw = None
-        elif len(inputs) == 3:
-            input_ids, (sections, labels), (sections_cw, labels_cw) = inputs
-        else:
-            raise ValueError(
-                'Number of inputs must be 2 or 3.'
-                '2 for [input_ids, [sections, labels]]'
-                ' and 3 for [input_ids, [sections, labels], [sections_cw, labels_cw]]'
-            )
-        outputs = self.compute_backbone_representation(input_ids, training=training)
-
-        section_losses = self.calc_representation_losses(
-            outputs.section_representation, outputs.section_logits, sections,
-            num_targets=self.config.num_sections, cw=sections_cw
-        )
-        label_losses = self.calc_representation_losses(
-            outputs.representation, outputs.logits, labels,
-            num_targets=self.config.num_labels, cw=labels_cw
-        )
-        section_probs = tf.cast(tf.nn.softmax(outputs.section_logits), dtype=tf.float32)
-        probs = tf.cast(tf.nn.softmax(outputs.logits), dtype=tf.float32)
-        cort_outputs = {
-            'section_probs': section_probs,
-            'section_ohe_labels': section_losses.ohe_labels,
-            'section_contrastive_loss': section_losses.contrastive_loss,
-            'section_cross_entropy_loss': section_losses.cross_entropy_loss,
-            'probs': probs,
-            'ohe_labels': label_losses.ohe_labels,
-            'contrastive_loss': label_losses.contrastive_loss,
-            'cross_entropy_loss': label_losses.cross_entropy_loss,
-        }
-        section_total_loss = section_losses.cross_entropy_loss + (self.config.alpha * section_losses.contrastive_loss)
-        label_total_loss = label_losses.cross_entropy_loss + (self.config.alpha * label_losses.contrastive_loss)
-        total_loss = section_total_loss + label_total_loss
-        return total_loss, cort_outputs
-
-    def get_config(self):
-        config = super(CortForElaboratedRepresentation, self).get_config()
-        config.update({
-            'config': self.config.to_dict()
         })
         return config

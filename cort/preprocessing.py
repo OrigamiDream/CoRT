@@ -1,5 +1,4 @@
 import re
-import time
 import json
 import logging
 import multiprocessing
@@ -7,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
+from utils import utils
 from soynlp import normalizer
 from typing import Union, Dict, Any, Iterable
 from multiprocessing import Process, Queue
@@ -75,16 +75,6 @@ def parse_and_preprocess_sentences(filepath: str) -> pd.DataFrame:
     return df
 
 
-def current_milliseconds():
-    return round(time.time() * 1000)
-
-
-def format_minutes_and_seconds(milliseconds):
-    minutes = int(milliseconds / 1000 / 60)
-    seconds = int(milliseconds / 1000) - (minutes * 60)
-    return minutes, seconds
-
-
 def normalize_texts(sentence,
                     filter_specials=True,
                     filter_characters=True,
@@ -139,7 +129,7 @@ def run_multiprocessing_job(fn,
         results = run_multiprocessing_job(counter, data, num_processes=5, args=(multiplier,))
         results = np.concatenate(results)
     """
-    start_time = current_milliseconds()
+    start_time = utils.current_milliseconds()
 
     if isinstance(data, list) or isinstance(data, tuple):
         size = sum([len(element) for element in data])
@@ -194,8 +184,8 @@ def run_multiprocessing_job(fn,
     [worker.join() for worker in workers]
     [worker.terminate() for worker in workers]
 
-    time_elapsed = current_milliseconds() - start_time
-    minutes, seconds = format_minutes_and_seconds(time_elapsed)
+    time_elapsed = utils.current_milliseconds() - start_time
+    minutes, seconds = utils.format_minutes_and_seconds(time_elapsed)
 
     logging.info('All workers have finished their jobs (time elapsed: {:02d}:{:02d})'.format(minutes, seconds))
     return values

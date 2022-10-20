@@ -1,13 +1,15 @@
 program: run_finetuning.py
-project: CoRT
-description: Representation Hyperparameters Tuning using Bayes Search for CoRT with Elaborated Representation
+project: CoRT Fine-tuning
+description: Bayes Search for CoRT Fine-tuning Hyperparameters from Scratch
 method: bayes
 metric:
-  name: val_total_loss
-  goal: minimize
+  name: val_accuracy
+  goal: maximize
 parameters:
-  cross_validation:
-    value: hyperparams
+  batch_size:
+    value: 64
+  train_at_once:
+    value: True
   include_sections:
     value: True
   repr_size:
@@ -22,41 +24,39 @@ parameters:
       - tanh
       - swish
       - gelu
-  repr_preact:
-    values: [False, True]
   loss_base:
     values:
       - margin
       - supervised
+  backbone_trainable_layers:
+    value: -1  # unfreeze all backbone model parameters
+  lr_fn:
+    value: polynomial_decay
+  warmup_rate:
+    value: 0.06
+  epochs:
+    value: 10
+  model_name:
+    values:
+      - klue/roberta-base
+      - korscibert
+      - korscielectra
   learning_rate:
     distribution: uniform
     min: 0.00001
     max: 0.0001
-  lr_fn:
-    values:
-      - cosine_decay
-      - polynomial_decay
-      - linear_decay
   layerwise_lr_decay:
     distribution: uniform
     min: 0.6
-    max: 0.9
+    max: 1.0
   weight_decay:
     distribution: uniform
-    min: 0
+    min: 0.0
     max: 0.01
-  backbone_trainable_layers:
-    values: [0, 1]
   alpha:
     distribution: uniform
     min: 1.5
-    max: 5.0
-  batch_size:
-    values: [16, 32]
-  gradient_accumulation_steps:
-    distribution: int_uniform
-    min: 1
-    max: 6
+    max: 4.0
   concat_hidden_states:
     distribution: int_uniform
     min: 1

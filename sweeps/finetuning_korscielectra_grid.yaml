@@ -1,0 +1,48 @@
+program: run_finetuning.py
+project: CoRT Fine-tuning
+description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone
+method: grid
+metric:
+  name: val_accuracy
+  goal: maximize
+parameters:
+  restore_checkpoint:
+    value: latest
+  pretraining_run_name:  # KorSci-ELECTRA W&B run names
+    values: [ggny0irv]
+  batch_size:
+    value: 64
+  repr_size:
+    value: 1024
+  repr_classifier:
+    values:
+      - seq_cls
+      - bi_lstm
+  repr_act:
+    values:
+      - none
+      - tanh
+      - swish
+      - gelu
+  loss_base:
+    values:
+      - margin
+      - supervised
+  backbone_trainable_layers:
+    value: 0  # freeze all backbone model parameters
+  lr_fn:
+    value: polynomial_decay
+  warmup_rate:
+    value: 0.06
+  epochs:
+    value: 10
+  model_name:
+    value: korscielectra
+  learning_rate:
+    value: 5e-5
+  weight_decay:
+    value: 0
+  alpha:
+    value: 2.0
+  concat_hidden_states:
+    value: 1
