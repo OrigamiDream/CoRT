@@ -1,15 +1,15 @@
 program: run_finetuning_v2.py
 project: CoRT Fine-tuning
-description: Bayes Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone
-method: bayes
+description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone
+method: grid
 metric:
   name: val_accuracy
   goal: maximize
 parameters:
   restore_checkpoint:
     value: latest
-  pretraining_run_name:  # KorSci-ELECTRA W&B run names
-    values: [ggny0irv]
+  pretraining_run_name:  # KorSci-BERT W&B run names
+    values: [ojxmf5hk, p5ggcow5, 4zbvw2mb, m34hlwig, q0nsostw, r5pa23zf, jy515tgx, x8ez3g0f, om3dm60l, 1vnsoo3g]
   batch_size:
     value: 64
   repr_size:
@@ -37,18 +37,12 @@ parameters:
   epochs:
     value: 10
   model_name:
-    value: korscielectra
+    value: korscibert
   learning_rate:
-    distribution: uniform
-    min: 0.00001
-    max: 0.0001
+    value: 5e-5
   weight_decay:
     value: 0
   alpha:
-    distribution: uniform
-    min: 1.5
-    max: 4.0
+    value: 2.0
   concat_hidden_states:
-    distribution: int_uniform
-    min: 1
-    max: 4
+    value: 1
