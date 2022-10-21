@@ -43,7 +43,7 @@ class Config:
         # Pre-training Hyperparameters
         self.num_train_steps = kwargs.pop('num_train_steps', 10000)
         self.save_checkpoint_steps = kwargs.pop('save_checkpoint_steps', 100)
-        self.keep_checkpoint_max = kwargs.pop('keep_checkpoint_max', 3)
+        self.keep_checkpoint_max = kwargs.pop('keep_checkpoint_max', 5)
         self.restore_checkpoint = kwargs.pop('restore_checkpoint', '')
         self.checkpoint_dir = kwargs.pop('checkpoint_dir', '')
         self.pretraining_checkpoint_dir = kwargs.pop('pretraining_checkpoint_dir',
