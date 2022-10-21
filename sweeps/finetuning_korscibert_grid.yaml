@@ -9,7 +9,7 @@ parameters:
   restore_checkpoint:
     value: latest
   pretraining_run_name:  # KorSci-BERT W&B run names
-    values: [ojxmf5hk, p5ggcow5, 4zbvw2mb, m34hlwig, q0nsostw, r5pa23zf, jy515tgx, x8ez3g0f, om3dm60l, 1vnsoo3g]
+    values: [jy515tgx, x8ez3g0f, om3dm60l, 1vnsoo3g]
   batch_size:
     value: 64
   repr_size:
@@ -24,6 +24,10 @@ parameters:
       - tanh
       - swish
       - gelu
+  repr_preact:
+    values:
+      - True
+      - False
   loss_base:
     values:
       - margin

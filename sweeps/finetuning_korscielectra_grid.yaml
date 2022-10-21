@@ -24,6 +24,10 @@ parameters:
       - tanh
       - swish
       - gelu
+  repr_preact:
+    values:
+      - True
+      - False
   loss_base:
     values:
       - margin
