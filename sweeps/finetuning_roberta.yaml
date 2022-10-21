@@ -9,9 +9,9 @@ parameters:
   restore_checkpoint:
     value: latest
   pretraining_run_name:  # klue/roberta-base W&B run names
-    values: [3blifut2, zwyafomh, u7rbr3je, ns4bedao, o1vzqxdn, wcxjgkdr, 2fzgjur4, myrzu7in, 4py7flt5, l4b2e95z, 6cnr8gb9, xzxa97jz, pyl5nczg, 5b6lcuno, lo4f6pma, ujh5yse9, qiha6oci, ylaayw7v, 6b2dulbe, k99rat0p, i9pfyw3i, u881sk6f, ezahqzxs, 5y7kkg5c, h89oi3o7]
+    value: zwyafomh
   batch_size:
-    value: 64
+    value: 32
   repr_size:
     value: 1024
   repr_classifier:
@@ -28,6 +28,8 @@ parameters:
     values:
       - margin
       - supervised
+  classifier_dropout_prob:
+    values: [0.1, 0.2, 0.3]
   backbone_trainable_layers:
     value: 0  # freeze all backbone model parameters
   lr_fn:
@@ -39,9 +41,7 @@ parameters:
   model_name:
     value: klue/roberta-base
   learning_rate:
-    distribution: uniform
-    min: 0.00001
-    max: 0.0001
+    value: 5e-5
   weight_decay:
     value: 0
   alpha:
