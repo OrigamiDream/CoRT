@@ -48,10 +48,9 @@ def create_scatter_representation_table(representations, labels):
 
 
 def create_pretrained_replica(config, ckpt_path):
+    optimizer, _ = create_optimizer(config, 10000)  # random steps
     replica = CortForPretraining(config)
     replica(replica.dummy_inputs)
-
-    optimizer, _ = create_optimizer(config, 10000)
     checkpoint = tf.train.Checkpoint(step=tf.Variable(0), optimizer=optimizer, model=replica)
     checkpoint.restore(ckpt_path)  # unresolved optimizer variables warnings
     return replica
