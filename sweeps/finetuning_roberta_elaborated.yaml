@@ -30,7 +30,7 @@ parameters:
       - supervised
   classifier_dropout_prob:
     values: [0.1, 0.2, 0.3]
-  finetune_repr:
+  repr_finetune:
     value: True
   include_sections:
     value: True
