@@ -222,7 +222,6 @@ def main():
                 # Reports metrics on W&B
                 wandb.log({
                     'loss': tf.reduce_mean(loss).numpy(),
-                    'iterations': optimizer.iterations.numpy(),
                     'learning_rate': learning_rate_fn(optimizer.iterations)
                 }, step=num_steps)
                 wandb.log({
