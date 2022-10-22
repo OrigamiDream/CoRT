@@ -9,7 +9,7 @@ parameters:
   restore_checkpoint:
     value: latest
   pretraining_run_name:  # klue/roberta-base W&B run names
-    value: zwyafomh
+    value: h89oi3o7
   batch_size:
     value: 32
   repr_size:
