@@ -31,7 +31,7 @@ parameters:
   warmup_rate:
     value: 0.06
   epochs:
-    value: 10
+    value: 5
   model_name:
     value: klue/roberta-base
   learning_rate:
