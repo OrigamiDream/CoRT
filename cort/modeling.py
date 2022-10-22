@@ -305,11 +305,8 @@ class CortForSequenceClassification(models.Model):
 
         self.cort = CortMainLayer(config, name='cort', **kwargs)
         if self.config.repr_classifier == 'seq_cls':
-            intermediate_size = (
-                self.config.repr_size if self.config.repr_finetune else self.config.pretrained_config.hidden_size
-            )
             self.classifier = CortClassificationHead(
-                config, intermediate_size=intermediate_size, num_labels=num_labels, name='classifier'
+                config, intermediate_size=self.config.repr_size, num_labels=num_labels, name='classifier'
             )
         elif self.config.repr_classifier == 'bi_lstm':
             self.classifier = CortBidirectionalClassificationHead(config, num_labels=num_labels, name='classifier')
