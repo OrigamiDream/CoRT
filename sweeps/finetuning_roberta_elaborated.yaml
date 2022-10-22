@@ -1,0 +1,58 @@
+program: run_finetuning.py
+project: CoRT Fine-tuning
+description: Bayes Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone
+method: bayes
+metric:
+  name: val_accuracy
+  goal: maximize
+parameters:
+  restore_checkpoint:
+    value: latest
+  pretraining_run_name:  # klue/roberta-base W&B run names
+    value: zwyafomh
+  batch_size:
+    value: 32
+  repr_size:
+    value: 1024
+  repr_classifier:
+    values:
+      - seq_cls
+      - bi_lstm
+  repr_act:
+    values:
+      - none
+      - tanh
+      - swish
+      - gelu
+  loss_base:
+    values:
+      - margin
+      - supervised
+  classifier_dropout_prob:
+    values: [0.1, 0.2, 0.3]
+  finetune_repr:
+    value: True
+  include_sections:
+    value: True
+  backbone_trainable_layers:
+    value: 0  # freeze all backbone model parameters
+  lr_fn:
+    value: polynomial_decay
+  warmup_rate:
+    value: 0.06
+  epochs:
+    value: 10
+  model_name:
+    value: klue/roberta-base
+  learning_rate:
+    value: 5e-5
+  weight_decay:
+    value: 0
+  alpha:
+    distribution: uniform
+    min: 1.5
+    max: 4.0
+  concat_hidden_states:
+    distribution: int_uniform
+    min: 1
+    max: 4

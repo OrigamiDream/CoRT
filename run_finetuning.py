@@ -69,7 +69,7 @@ def create_metric_map(config):
     )
 
     # Metrics for model without Pre-trained model
-    if config.train_at_once:
+    if config.repr_finetune:
         metric_map['co_loss'] = metrics.Mean(name='co_loss')
         metric_map['cce_loss'] = metrics.Mean(name='cce_loss')
 
@@ -100,7 +100,7 @@ def metric_fn(dicts, cort_outputs, config):
             y_pred=d['probs']
         )
 
-    if config.train_at_once:
+    if config.repr_finetune:
         dicts['co_loss'].update_state(values=d['co_loss'])
         dicts['cce_loss'].update_state(values=d['cce_loss'])
 
@@ -150,8 +150,8 @@ def main():
     with strategy.scope() if config.distribute else utils.empty_context_manager():
         optimizer, learning_rate_fn = create_optimizer(config, total_train_steps)
 
-        if config.train_at_once and config.include_sections:
-            logging.info('Training at Once, Including Sections → Elaborated Representation')
+        if config.repr_finetune and config.include_sections:
+            logging.info('Fine-tuning Representation, Including Sections → Elaborated Representation')
             model = CortForElaboratedSequenceClassification(
                 config,
                 num_sections=config.num_sections,

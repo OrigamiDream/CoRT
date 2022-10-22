@@ -179,8 +179,8 @@ class CortForElaboratedSequenceClassification(models.Model):
 
     def __init__(self, config: ConfigLike, num_sections: int, num_labels: int, **kwargs):
         super(CortForElaboratedSequenceClassification, self).__init__(**kwargs)
-        assert config.train_at_once, (
-            'CoRT for elaborated sequence classification requires to enable `train_at_once`'
+        assert config.repr_finetune, (
+            'CoRT for elaborated sequence classification requires to enable `repr_finetune`'
         )
         assert config.include_sections, (
             'CoRT for elaborated sequence classification requires to enable `include_sections`'
@@ -306,7 +306,7 @@ class CortForSequenceClassification(models.Model):
         self.cort = CortMainLayer(config, name='cort', **kwargs)
         if self.config.repr_classifier == 'seq_cls':
             intermediate_size = (
-                self.config.repr_size if self.config.train_at_once else self.config.pretrained_config.hidden_size
+                self.config.repr_size if self.config.repr_finetune else self.config.pretrained_config.hidden_size
             )
             self.classifier = CortClassificationHead(
                 config, intermediate_size=intermediate_size, num_labels=num_labels, name='classifier'
@@ -354,7 +354,7 @@ class CortForSequenceClassification(models.Model):
         cce_loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
 
         total_loss = cce_loss
-        if self.config.train_at_once:
+        if self.config.repr_finetune:
             if labels is not None and self.config.loss_base == 'margin':
                 co_loss = calc_margin_based_contrastive_loss(representation, labels)
             elif labels is not None and self.config.loss_base == 'supervised':

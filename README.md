@@ -128,8 +128,9 @@ It has the following arguments:
 - `--restore_checkpoint`: Name of checkpoint file. (`None` as default. I recommend 'latest' when fine-tune)
 - `--repr_classifier`: Type of classification head. ('seq_cls' as default. 'seq_cls' and 'bi_lstm' is available)
 - `--repr_preact`: Boolean to use pre-activation when activating representation logits. (`True` as default)
-- `--train_at_once`: Boolean when you want to the model from scratch without pre-training. (`False` as default)
-- `--include_sections`: Boolean when you want to use 'representation logits of sections' on label representation logits. (`False` as default. `--train_at_once True' is required for this)
+- `--train_at_once`: Boolean when you want to train the model from scratch without pre-training. (`False` as default)
+- `--repr_finetune`: Boolean when you want to fine-tune the model with additional Representation Learning. (`False` as default) 
+- `--include_sections`: Boolean when you want to use 'representation logits of sections' on label representation logits. (`False` as default. `--repr_finetune True' is required for this)
 
 
 # Results

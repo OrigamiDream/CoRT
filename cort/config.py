@@ -34,6 +34,7 @@ class Config:
         self.dynamic_datagen = kwargs.pop('dynamic_datagen', False)
 
         self.train_at_once = kwargs.pop('train_at_once', False)
+        self.repr_finetune = kwargs.pop('repr_finetune', False)
         self.cross_validation = kwargs.pop('cross_validation', 'kfold')  # kfold, hyperparams
         self.num_k_fold = kwargs.pop('num_f_fold', 10)
         self.current_fold = kwargs.pop('current_fold', 0)
