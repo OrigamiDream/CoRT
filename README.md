@@ -130,7 +130,7 @@ It has the following arguments:
 - `--repr_preact`: Boolean to use pre-activation when activating representation logits. (`True` as default)
 - `--train_at_once`: Boolean when you want to train the model from scratch without pre-training. (`False` as default)
 - `--repr_finetune`: Boolean when you want to fine-tune the model with additional Representation Learning. (`False` as default) 
-- `--include_sections`: Boolean when you want to use 'representation logits of sections' on label representation logits. (`False` as default. `--repr_finetune True' is required for this)
+- `--include_sections`: Boolean when you want to use 'representation logits of sections' on label representation logits. (`False` as default. `--repr_finetune True` is required for this)
 
 
 # Results
