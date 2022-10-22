@@ -72,7 +72,7 @@ def create_optimizer(config: ConfigLike, total_train_steps):
         raise ValueError('Invalid learning rate function type:', config.lr_fn)
 
     if config.warmup_rate > 0:
-        logging.info('Linear WarmUp Enabled')
+        logging.info('Linear WarmUp Enabled (first {} steps)'.format(warmup_apical_steps))
         learning_rate_fn = LinearWarmUp(
             initial_learning_rate=config.learning_rate,
             decay_schedule_fn=learning_rate_fn,
