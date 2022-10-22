@@ -47,9 +47,11 @@ def create_scatter_representation_table(representations, labels):
     return df
 
 
-def create_pretrained_replica(config, optimizer, ckpt_path):
+def create_pretrained_replica(config, ckpt_path):
     replica = CortForPretraining(config)
     replica(replica.dummy_inputs)
+
+    optimizer, _ = create_optimizer(config, 10000)
     checkpoint = tf.train.Checkpoint(step=tf.Variable(0), optimizer=optimizer, model=replica)
     checkpoint.restore(ckpt_path)  # unresolved optimizer variables warnings
     return replica
@@ -148,8 +150,6 @@ def main():
     total_train_steps = config.epochs * steps_per_epoch
     logging.info('Training steps_per_epoch: {}, total_train_steps: {}'.format(steps_per_epoch, total_train_steps))
     with strategy.scope() if config.distribute else utils.empty_context_manager():
-        optimizer, learning_rate_fn = create_optimizer(config, total_train_steps)
-
         if config.repr_finetune and config.include_sections:
             logging.info('Fine-tuning Representation, Including Sections → Elaborated Representation')
             model = CortForElaboratedSequenceClassification(
@@ -183,7 +183,7 @@ def main():
                 checkpoint_path = tf.train.latest_checkpoint(config.checkpoint_dir)
             else:
                 checkpoint_path = os.path.join(config.checkpoint_dir, config.restore_checkpoint)
-            pretrained_replica = create_pretrained_replica(config, optimizer, checkpoint_path)
+            pretrained_replica = create_pretrained_replica(config, checkpoint_path)
             model.cort.set_weights(pretrained_replica.cort.get_weights())
             logging.info('Restored Pre-trained `{}` model from {}'.format(config.model_name, config.checkpoint_dir))
             logging.info('#' * len(title))
@@ -192,6 +192,8 @@ def main():
 
         metric_maps = create_metric_map(config)
         compile_metric_names = ['accuracy', 'recall', 'precision', 'micro_f1_score', 'macro_f1_score']
+        optimizer, learning_rate_fn = create_optimizer(config, total_train_steps)
+
         model.compile(
             optimizer=optimizer, loss=model.loss_fn,
             metrics=[metric_maps[name] for name in compile_metric_names]
