@@ -45,7 +45,7 @@ parameters:
   model_name:
     value: klue/roberta-base
   learning_rate:
-    value: 5e-5
+    value: 1e-4
   weight_decay:
     value: 0
   alpha:
