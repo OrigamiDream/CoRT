@@ -33,7 +33,7 @@ parameters:
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    value: 0.12
+    value: 0.06
   epochs:
     value: 5
   model_name:
