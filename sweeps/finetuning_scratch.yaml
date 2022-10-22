@@ -7,8 +7,10 @@ metric:
   goal: maximize
 parameters:
   batch_size:
-    value: 64
+    value: 32
   train_at_once:
+    value: True
+  repr_finetune:
     value: True
   repr_size:
     value: 1024
@@ -31,9 +33,9 @@ parameters:
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    value: 0.06
+    value: 0.12
   epochs:
-    value: 10
+    value: 5
   model_name:
     values:
       - klue/roberta-base

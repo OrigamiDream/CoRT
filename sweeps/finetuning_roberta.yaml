@@ -24,10 +24,6 @@ parameters:
       - tanh
       - swish
       - gelu
-  loss_base:
-    values:
-      - margin
-      - supervised
   classifier_dropout_prob:
     values: [0.1, 0.2, 0.3]
   backbone_trainable_layers:
@@ -35,9 +31,9 @@ parameters:
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    value: 0.06
+    value: 0.12
   epochs:
-    value: 10
+    value: 5
   model_name:
     value: klue/roberta-base
   learning_rate:

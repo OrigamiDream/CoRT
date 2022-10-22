@@ -11,7 +11,7 @@ parameters:
   pretraining_run_name:  # KorSci-BERT W&B run names
     values: [jy515tgx, x8ez3g0f, om3dm60l, 1vnsoo3g]
   batch_size:
-    value: 64
+    value: 32
   repr_size:
     value: 1024
   repr_classifier:
@@ -24,18 +24,14 @@ parameters:
       - tanh
       - swish
       - gelu
-  loss_base:
-    values:
-      - margin
-      - supervised
   backbone_trainable_layers:
     value: 0  # freeze all backbone model parameters
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    value: 0.06
+    value: 0.12
   epochs:
-    value: 10
+    value: 5
   model_name:
     value: korscibert
   learning_rate:

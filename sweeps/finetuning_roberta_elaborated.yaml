@@ -39,9 +39,9 @@ parameters:
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    value: 0.06
+    value: 0.12
   epochs:
-    value: 10
+    value: 5
   model_name:
     value: klue/roberta-base
   learning_rate:
@@ -49,10 +49,6 @@ parameters:
   weight_decay:
     value: 0
   alpha:
-    distribution: uniform
-    min: 1.5
-    max: 4.0
+    values: [1.5, 2.0, 2.5]
   concat_hidden_states:
-    distribution: int_uniform
-    min: 1
-    max: 4
+    values: [1, 2, 3, 4]
