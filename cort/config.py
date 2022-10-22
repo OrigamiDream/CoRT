@@ -39,7 +39,6 @@ class Config:
         self.num_k_fold = kwargs.pop('num_f_fold', 10)
         self.current_fold = kwargs.pop('current_fold', 0)
         self.model_name = kwargs.pop('model_name', 'klue/roberta-base')
-        self.early_stop_slow_converge = kwargs.pop('early_stop_slow_converge', True)  # Fine-tuning early stopping
 
         # Pre-training Hyperparameters
         self.num_train_steps = kwargs.pop('num_train_steps', 10000)

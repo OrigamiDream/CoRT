@@ -206,7 +206,6 @@ def main():
         logging.info('  Total training steps = {}'.format(total_train_steps))
 
         num_steps = 0
-        early_stopping = False
         for epoch in range(config.initial_epoch, config.epochs):
             print('\nEpoch {}/{}'.format(epoch + 1, config.epochs))
             progbar = Progbar(steps_per_epoch, stateful_metrics=[metric.name for metric in metric_maps.values()])
@@ -231,15 +230,6 @@ def main():
                     metric_name: metric.result().numpy() for metric_name, metric in metric_maps.items()
                 }, step=num_steps)
                 num_steps += 1
-
-                acc = float(metric_maps['accuracy'].result().numpy())
-                if epoch == 0 and num_steps == 100 and acc < 0.3 and config.early_stop_slow_converge:
-                    logging.warning('The model is converging very slowly. {:.5f} < 0.5 at first 100 steps'.format(acc))
-                    early_stopping = True
-                    break
-
-            if early_stopping:
-                break
 
             # Reset all metric states for evaluation
             epoch_logs = {}
