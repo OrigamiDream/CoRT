@@ -253,7 +253,7 @@ def main():
 
                 if 'section_representation' in cort_outputs:
                     section_representations.append(cort_outputs['section_representation'].numpy())
-                    sections.append(cort_outputs['sections'].numpy())
+                    sections.append(cort_outputs['section_labels'].numpy())
 
             wandb_logs = {}
             for metric_name, metric in metric_maps.items():
