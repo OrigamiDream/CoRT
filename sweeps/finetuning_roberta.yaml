@@ -40,7 +40,5 @@ parameters:
     value: 5e-5
   weight_decay:
     value: 0
-  alpha:
-    values: [1.5, 2.0, 2.5]
   concat_hidden_states:
     values: [1, 2, 3, 4]
