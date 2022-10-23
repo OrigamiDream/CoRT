@@ -89,6 +89,7 @@ It has the following arguments:
 - `--korscielectra_vocab`: Location of KorSci-ELECTRA vocabulary file. (optional)
 - `--num_processes`: Parallelize tokenization across multi processes. (4 as default)
 - `--num_k_fold`: Number of K-Fold splits. (10 as default)
+- `--test_size`: Rate of testing dataset. (0.0 as default)
 - `--seed`: Seed of random state. (42 as default)
 
 Use `run_pretraining.py` to pre-train the backbone model in representation learning manner.

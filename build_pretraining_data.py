@@ -8,7 +8,7 @@ import tensorflow as tf
 from utils import utils
 from utils.formatting_utils import setup_formatter
 from cort.preprocessing import parse_and_preprocess_sentences, run_multiprocessing_job, normalize_texts
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 
 def preprocess_sentences_on_batch(batch):
@@ -24,12 +24,13 @@ def create_int_feature(values):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
 
 
-def write_examples(fname, input_ids, sections, labels, indices):
+def write_examples(fname, input_ids, sections, labels, indices=None):
     writer = tf.io.TFRecordWriter(fname)
 
-    input_ids = input_ids[indices]
-    sections = sections[indices]
-    labels = labels[indices]
+    if indices is not None:
+        input_ids = input_ids[indices]
+        sections = sections[indices]
+        labels = labels[indices]
 
     assert len(input_ids) == len(sections) == len(labels), (
         'Number of all samples must be same'
@@ -65,17 +66,29 @@ def create_tfrecords(args, output_dir):
     sections = np.array(df['code_sections'].values, dtype=np.int32)
     labels = np.array(df['code_labels'].values, dtype=np.int32)
 
+    if args.test_size:
+        splits = train_test_split(input_ids, sections, labels,
+                                  test_size=args.test_size, random_state=args.seed, shuffle=True, stratify=labels)
+        train_input_ids, test_input_ids, train_sections, test_sections, train_labels, test_labels = splits
+
+        fname = os.path.join(output_dir, 'test.tfrecord')
+        write_examples(fname, test_input_ids, test_sections, test_labels)
+
+        input_ids = train_input_ids
+        sections = train_sections
+        labels = train_labels
+
     fold = StratifiedKFold(n_splits=args.num_k_fold, shuffle=True, random_state=args.seed)
     for index, (train_indices, valid_indices) in enumerate(fold.split(input_ids, labels)):
         fname = os.path.join(
             output_dir, 'train.fold-{}-of-{}.tfrecord'.format(index + 1, args.num_k_fold)
         )
-        write_examples(fname, input_ids, sections, labels, train_indices)
+        write_examples(fname, input_ids, sections, labels, indices=train_indices)
 
         fname = os.path.join(
             output_dir, 'valid.fold-{}-of-{}.tfrecord'.format(index + 1, args.num_k_fold)
         )
-        write_examples(fname, input_ids, sections, labels, valid_indices)
+        write_examples(fname, input_ids, sections, labels, indices=valid_indices)
 
 
 def main():
@@ -96,6 +109,8 @@ def main():
                         help='Parallelize across multiple processes')
     parser.add_argument('--num_k_fold', default=10, type=int,
                         help='Number of K-Fold splits')
+    parser.add_argument('--test_size', default=0, type=float,
+                        help='Rate of testing dataset')
     parser.add_argument('--seed', default=42, type=int,
                         help='The seed of random state')
 
