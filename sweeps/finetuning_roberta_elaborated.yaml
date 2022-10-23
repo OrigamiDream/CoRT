@@ -39,9 +39,9 @@ parameters:
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    value: 0.06
+    values: [0.0, 0.3]
   epochs:
-    value: 5
+    value: 1
   model_name:
     value: klue/roberta-base
   learning_rate:
