@@ -62,6 +62,9 @@ class Config:
         self.layerwise_lr_decay = kwargs.pop('layerwise_lr_decay', 0.0)
         self.optimizer_clip_norm = kwargs.pop('optimizer_clip_norm', 1.0)
 
+        # On Fine-tuning stage, use optimizer states that had used in Pre-training stage
+        self.keep_optimizer_state = kwargs.pop('keep_optimizer_state', False)
+
         # Size of dense representation layer for Contrastive Representation Learning
         self.repr_size = kwargs.pop('repr_size', 1024)
         self.gradient_accumulation_steps = kwargs.pop('gradient_accumulation_steps', 1)

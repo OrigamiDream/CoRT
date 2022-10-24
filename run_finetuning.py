@@ -48,6 +48,9 @@ def create_scatter_representation_table(representations, labels):
 
 
 def create_pretrained_replica(config, optimizer, ckpt_path):
+    if not config.keep_optimizer_state:
+        optimizer, _ = create_optimizer(config, 10000)  # overriding the optimizer states
+
     replica = CortForPretraining(config)
     replica(replica.dummy_inputs)
     checkpoint = tf.train.Checkpoint(step=tf.Variable(0), optimizer=optimizer, model=replica)
@@ -192,9 +195,10 @@ def main():
         metric_maps = create_metric_map(config)
         compile_metric_names = ['accuracy', 'recall', 'precision', 'micro_f1_score', 'macro_f1_score']
 
-        # Reset optimizer state except required parameters
-        # The latest optimizer parameters help fast converging when Fine-tuning
-        optimizer.iterations.assign(0)
+        if config.keep_optimizer_state:
+            # Reset optimizer state except required parameters
+            # The latest optimizer parameters help fast converging when Fine-tuning
+            optimizer.iterations.assign(0)
 
         model.compile(
             optimizer=optimizer, loss=model.loss_fn,
