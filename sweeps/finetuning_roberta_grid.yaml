@@ -15,23 +15,17 @@ parameters:
   repr_size:
     value: 1024
   repr_classifier:
-    values:
-      - seq_cls
-      - bi_lstm
+    value: seq_cls
   repr_act:
-    values:
-      - none
-      - tanh
-      - swish
-      - gelu
+    value: tanh
   backbone_trainable_layers:
     value: 0  # freeze all backbone model parameters
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    value: 0.06
+    value: 0
   epochs:
-    value: 5
+    value: 1
   model_name:
     value: klue/roberta-base
   learning_rate:
