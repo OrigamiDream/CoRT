@@ -1,7 +1,7 @@
 program: run_finetuning.py
 project: CoRT Fine-tuning
-description: Bayes Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone
-method: bayes
+description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone
+method: grid
 metric:
   name: val_accuracy
   goal: maximize
@@ -9,7 +9,7 @@ parameters:
   restore_checkpoint:
     value: latest
   pretraining_run_name:  # klue/roberta-base W&B run names
-    value: h89oi3o7
+    values: [ns4bedao, 6cnr8gb9, lo4f6pma, qiha6oci]
   batch_size:
     value: 32
   repr_size:
@@ -20,25 +20,23 @@ parameters:
       - bi_lstm
   repr_act:
     values:
-      - none
       - tanh
-      - swish
       - gelu
   classifier_dropout_prob:
-    values: [0.1, 0.2, 0.3]
+    value: 0.1
   backbone_trainable_layers:
     value: 0  # freeze all backbone model parameters
   lr_fn:
     value: polynomial_decay
   warmup_rate:
-    values: [0.0, 0.3]
+    value: 0
   epochs:
     value: 1
   model_name:
     value: klue/roberta-base
   learning_rate:
-    value: 5e-5
+    values: [5e-4, 5e-5, 1e-5]
   weight_decay:
     value: 0
   concat_hidden_states:
-    values: [1, 2, 3, 4]
+    values: [1, 2, 3]
