@@ -20,13 +20,16 @@ EMAIL_FILTER_PATTERN = re.compile(r'[-\w.]+@([\w-]+\.)+[\w-]{2,4}')
 TAGS_FILTER_PATTERN = re.compile(r'([#@]\S+)')
 PERIOD_CORRECTION_PATTERN = re.compile(r'(( )(\. |\.\. ))')
 PERIOD_REPEAT_PATTERN = re.compile(r'(\.)\1{2,}')
-SPECIAL_CHAR_REPLACEMENTS = [
+REMOVABLE_SPECIAL_CHAR_REPLACEMENTS = [
     ('χ', 'x'), ('ℓ', 'L'), ('β', '베타'), ('&lt;', '<'), ('&gt;', '>'), ('–', '-'),
     ('℃', '도씨'), ('α', '알파'), ('㎏', 'kg'), ('㎝', 'cm'), ('㎛', 'mm'), ('～', '~'),
     ('‧', '·'), ('ㆍ', '·'), ('：', ':'), ('°', '도'), ('×', 'x'), ('μ', 'm'), ('㏊', 'ha'),
     ('㎚', 'nm'), ('㎜', 'mm'), ('㎞', 'km'), ('㎟', 'mm'), ('㎠', 'cm'), ('㎡', 'm'),
     ('㎢', 'km'), ('㎕', 'mL'), ('㎖', 'mL'), ('㎗', 'dL'), ('㎣', 'mm'), ('㎤', 'cm'),
-    ('㎥', 'm'), ('㎦', 'km'), ('㏄', 'cc'), ('팔꿉', '팔꿈치'), ('θ', '세타'), ('뻣나무', '벚나무'),
+    ('㎥', 'm'), ('㎦', 'km'), ('㏄', 'cc'), ('θ', '세타')
+]
+SPECIAL_CHAR_REPLACEMENTS = [
+    ('팔꿉', '팔꿈치'), ('뻣나무', '벚나무')
 ]
 
 RESEARCH_PURPOSE = ['문제 정의', '가설 설정', '기술 정의']
@@ -77,6 +80,7 @@ def parse_and_preprocess_sentences(filepath: str) -> pd.DataFrame:
 
 def normalize_texts(sentence,
                     filter_specials=True,
+                    remove_specials=True,
                     filter_characters=True,
                     filter_urls=True,
                     filter_tags=True,
@@ -86,6 +90,8 @@ def normalize_texts(sentence,
                     normalize_repeats=True,
                     remove_spaces=True):
     if filter_specials:
+        for before, after in REMOVABLE_SPECIAL_CHAR_REPLACEMENTS:
+            sentence = sentence.replace(before, ' ' if remove_specials else after)
         for before, after in SPECIAL_CHAR_REPLACEMENTS:
             sentence = sentence.replace(before, after)
     if filter_characters:
