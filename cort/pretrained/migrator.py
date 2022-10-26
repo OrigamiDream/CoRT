@@ -8,7 +8,7 @@ from transformers import TFElectraModel, ElectraConfig
 from transformers import TFBertModel, BertConfig
 
 
-def create_base_bert_config(pad_token_id):
+def create_base_bert_config(vocab):
     config = BertConfig.from_pretrained('bert-base-uncased')
     config.attention_probs_dropout_prob = 0.1
     config.hidden_act = 'gelu'
@@ -21,19 +21,25 @@ def create_base_bert_config(pad_token_id):
     config.num_hidden_layers = 12
     config.type_vocab_size = 2
     config.vocab_size = 15330
-    config.pad_token_id = pad_token_id
+    config.pad_token_id = vocab['[PAD]']
+    config.cls_token_id = vocab['[CLS]']
+    config.sep_token_id = vocab['[SEP]']
+    config.unk_token_id = vocab['[UNK]']
     return config
 
 
-def create_base_electra_config(pad_token_id):
+def create_base_electra_config(vocab):
     config = ElectraConfig.from_pretrained('google/electra-base-discriminator')
     config.vocab_size = 16200
-    config.pad_token_id = pad_token_id
+    config.pad_token_id = vocab['[PAD]']
+    config.cls_token_id = vocab['[CLS]']
+    config.sep_token_id = vocab['[SEP]']
+    config.unk_token_id = vocab['[UNK]']
     return config
 
 
-def create_base_electra(pad_token_id, name=None):
-    config = create_base_electra_config(pad_token_id)
+def create_base_electra(vocab, name=None):
+    config = create_base_electra_config(vocab)
     batch_size = 1
     eval_shape = (batch_size, config.max_position_embeddings)
     eval_inputs = {
@@ -46,8 +52,8 @@ def create_base_electra(pad_token_id, name=None):
     return electra
 
 
-def create_base_bert(pad_token_id, name=None):
-    config = create_base_bert_config(pad_token_id)
+def create_base_bert(vocab, name=None):
+    config = create_base_bert_config(vocab)
     batch_size = 1
     eval_shape = (batch_size, config.max_position_embeddings)
     eval_inputs = {
@@ -74,14 +80,14 @@ def read_var_mappings(mapping_name):
     return mappings
 
 
-def migrate_electra(ckpt_dir_or_file, pad_token_id, name=None):
-    electra = create_base_electra(pad_token_id, name=name)
+def migrate_electra(ckpt_dir_or_file, vocab, name=None):
+    electra = create_base_electra(vocab, name=name)
     disallows = ['adam', 'generator', 'global_step', 'discriminator']
     return migrate_internal(electra, ckpt_dir_or_file, 'electra_mappings.txt', disallows)
 
 
-def migrate_bert(ckpt_dir_or_file, pad_token_id, name=None):
-    bert = create_base_bert(pad_token_id, name=name)
+def migrate_bert(ckpt_dir_or_file, vocab, name=None):
+    bert = create_base_bert(vocab, name=name)
     disallows = ['adam', 'global_step', 'good_steps', 'current_loss_scale', 'cls/']
     return migrate_internal(bert, ckpt_dir_or_file, 'bert_mappings.txt', disallows)
 

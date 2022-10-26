@@ -72,10 +72,10 @@ def format_minutes_and_seconds(milliseconds):
 def parse_pretrained_config(config):
     if config.model_name == 'korscibert':
         vocab = parse_vocabulary(config.korscibert_vocab)
-        pretrained_config = migrator.create_base_bert_config(pad_token_id=vocab['[PAD]'])
+        pretrained_config = migrator.create_base_bert_config(vocab)
     elif config.model_name == 'korscielectra':
         vocab = parse_vocabulary(config.korscielectra_vocab)
-        pretrained_config = migrator.create_base_electra_config(pad_token_id=vocab['[PAD]'])
+        pretrained_config = migrator.create_base_electra_config(vocab)
     else:
         pretrained_config = AutoConfig.from_pretrained(config.model_name)
 

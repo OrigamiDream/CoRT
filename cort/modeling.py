@@ -110,11 +110,11 @@ def configure_backbone_model(config: Config):
     if config.model_name == 'korscielectra':
         logging.info('Migrating KorSci-ELECTRA')
         vocab = utils.parse_vocabulary(config.korscielectra_vocab)
-        backbone = migrator.migrate_electra(config.korscielectra_ckpt, pad_token_id=vocab['[PAD]'], name='backbone')
+        backbone = migrator.migrate_electra(config.korscielectra_ckpt, vocab, name='backbone')
     elif config.model_name == 'korscibert':
         logging.info('Migrating KorSci-BERT')
         vocab = utils.parse_vocabulary(config.korscibert_vocab)
-        backbone = migrator.migrate_bert(config.korscibert_ckpt, pad_token_id=vocab['[PAD]'], name='backbone')
+        backbone = migrator.migrate_bert(config.korscibert_ckpt, vocab, name='backbone')
     else:
         logging.info('Loading `{}` from HuggingFace'.format(config.model_name))
         backbone = TFAutoModel.from_pretrained(config.model_name, from_pt=True, name='backbone')
