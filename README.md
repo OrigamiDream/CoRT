@@ -59,8 +59,8 @@ The paper suggests training strategy, by pulling together in the same-level cate
 ### Prerequisites
 
 All prerequisites must be up-to-date.
-
 W&B is always required to run pre-training and fine-tuning scripts.
+Requiring to use Python 3.8 or above.
 
 ```bash
 - tensorflow
