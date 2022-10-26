@@ -10,6 +10,7 @@ class TokenizerDelegate:
         self.cls_token_id = self.delegate.convert_tokens_to_ids(['[CLS]'])[0]
         self.sep_token_id = self.delegate.convert_tokens_to_ids(['[SEP]'])[0]
         self.pad_token_id = self.delegate.convert_tokens_to_ids(['[PAD]'])[0]
+        self.unk_token_id = self.delegate.convert_tokens_to_ids(['[UNK]'])[0]
         self.num_reserved_tokens = 2
 
     def tokenize(self, text):
