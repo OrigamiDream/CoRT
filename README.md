@@ -36,8 +36,8 @@ The classic contrastive learning is Self-supervised Learning, the model can clas
 In the paper, they suggest supervised-manner learning when you have labels.
 
 I've used contrastive loss from the paper, and Pre-training and Fine-tuning separation.<br>
-First, Perform Pre-training in representation learning manner.<br>
-Second, to perform Fine-tuning, cut off the representation projection layer and attach new classifier layers.
+1. Perform Pre-training in representation learning manner.
+2. to perform Fine-tuning, cut off the representation projection layer and attach new classifier layers.
 
 This gave me significant improvement on performance and speed of converge.
 
@@ -132,6 +132,18 @@ It has the following arguments:
 - `--train_at_once`: Boolean when you want to train the model from scratch without pre-training. (`False` as default)
 - `--repr_finetune`: Boolean when you want to fine-tune the model with additional Representation Learning. (`False` as default) 
 - `--include_sections`: Boolean when you want to use 'representation logits of sections' on label representation logits. (`False` as default. `--repr_finetune True` is required for this)
+
+
+# Notes
+
+I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (about 85.2%).
+
+| Model             | Number of [UNK] | Total Tokens | [UNK] Rate   |
+|-------------------|-----------------|--------------|--------------|
+| klue/roberta-base | 2,734           | 9,269,131    | 0.000295     |
+| KorSci-BERT       | 14,237          | 9,077,386    | 0.001568     |
+| KorSci-ELECTRA    | 7,345,917       | 8,621,489    | **0.852047** |
+
 
 
 # Results
