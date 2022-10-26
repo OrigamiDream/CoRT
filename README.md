@@ -82,7 +82,7 @@ And run `wandb agent "{entity_name}/CoRT Pre-training/{sweep_id}"`
 
 Use `build_pretraining_data.py` to create a pre-training dataset from raw texts.
 It has the following arguments:
-- `--filepath`: Location of raw text dataset available at [KISTI](https://doi.org/10.23057/36).
+- `--filepath`: Location of raw texts dump that is available at [KISTI](https://doi.org/10.23057/36).
 - `--model_name`: Model name to be used as Pre-trained backbones. `korscibert` and `korscielectra` is available by default.
 - `--output_dir`: Destination directory path to write out the tfrecords.
 - `--korscibert_vocab`: Location of KorSci-BERT vocabulary file. (optional)
