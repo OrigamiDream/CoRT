@@ -134,7 +134,7 @@ It has the following arguments:
 - `--include_sections`: Boolean when you want to use 'representation logits of sections' on label representation logits. (`False` as default. `--repr_finetune True` is required for this)
 
 
-# Notes
+### Notes
 
 I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (about 85.2%).
 
@@ -146,6 +146,6 @@ I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (
 
 
 
-# Results
+### Results
 
 Results are not yet available because the competition is not finished.
