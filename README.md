@@ -80,6 +80,8 @@ W&B Sweeps configurations are available in `./sweeps` directory.<br>
 Run automatic hyperparameter tuning by (for example) `wandb sweep ./sweeps/pretraining_supervised.yaml`<br>
 And run `wandb agent "{entity_name}/CoRT Pre-training/{sweep_id}"`
 
+To find out how to prepare Pre-trained backbones for Pre-training, read [Pre-trained Backbones README](https://github.com/OrigamiDream/CoRT/blob/main/cort/pretrained/README.md)
+
 Use `build_pretraining_data.py` to create a pre-training dataset from raw texts.
 It has the following arguments:
 - `--filepath`: Location of raw texts dump that is available at [KISTI](https://doi.org/10.23057/36).
