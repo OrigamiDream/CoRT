@@ -1,6 +1,6 @@
 program: run_finetuning.py
 project: CoRT Fine-tuning
-description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone
+description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone (K-Fold)
 method: grid
 metric:
   name: val_accuracy
@@ -8,20 +8,16 @@ metric:
 parameters:
   restore_checkpoint:
     value: latest
-  pretraining_run_name:  # klue/roberta-base W&B run names
-    values: [ns4bedao, 6cnr8gb9, lo4f6pma, qiha6oci]
+  pretraining_run_name:  # KorSci-BERT W&B run names
+    value: 1vnsoo3g
   batch_size:
     value: 32
   repr_size:
     value: 1024
   repr_classifier:
-    values:
-      - seq_cls
-      - bi_lstm
+    value: seq_cls
   repr_act:
-    values:
-      - tanh
-      - gelu
+    value: tanh
   backbone_trainable_layers:
     value: 0  # freeze all backbone model parameters
   lr_fn:
@@ -31,10 +27,12 @@ parameters:
   epochs:
     value: 1
   model_name:
-    value: klue/roberta-base
+    value: korscibert
   learning_rate:
-    values: [5e-4, 5e-5, 1e-5]
+    value: 5e-4
   weight_decay:
     value: 0
   concat_hidden_states:
-    values: [1, 2, 3]
+    value: 2
+  current_fold:
+    values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
