@@ -37,7 +37,7 @@ In the paper, they suggest supervised-manner learning when you have labels.
 
 I've used contrastive loss from the paper, and Pre-training and Fine-tuning separation.<br>
 1. Perform Pre-training in representation learning manner.
-2. to perform Fine-tuning, cut off the representation projection layer and attach new classifier layers.
+2. To perform Fine-tuning, cut off the representation projection layer and attach new classifier layers.
 
 This gave me significant improvement on performance and speed of converge.
 
