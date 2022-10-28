@@ -9,7 +9,7 @@ parameters:
   restore_checkpoint:
     value: latest
   pretraining_run_name:  # KorSci-BERT W&B run names
-    value: 1vnsoo3g
+    value: om3dm60l
   batch_size:
     value: 32
   repr_size:
@@ -29,7 +29,7 @@ parameters:
   model_name:
     value: korscibert
   learning_rate:
-    value: 5e-4
+    value: 1e-6
   weight_decay:
     value: 0
   concat_hidden_states:
