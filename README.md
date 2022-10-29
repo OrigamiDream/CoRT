@@ -159,6 +159,8 @@ I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (
 
 The dataset has class imbalance, therefore `micro f1-score` that takes class imbalance into account is more reliable than `macro f1-score` and `accuracy`.
 
+CoRT shows better performance on overall scores comparing with baseline models despite its smaller model architecture.
+
 ### Acknowledgement
 
 CoRT was created with GPU support from the [**KISTI National Supercomputing Center (KSC) Neuron**](https://www.ksc.re.kr/ggspcpt/neuron) free trial.
