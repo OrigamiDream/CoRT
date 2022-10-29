@@ -124,7 +124,7 @@ def main():
     model.trainable = False
 
     checkpoint = tf.train.Checkpoint(model=model)
-    checkpoint.restore(args.checkpoint_path)
+    checkpoint.restore(args.checkpoint_path).expect_partial()
     logging.info('Restored model checkpoint from {}'.format(args.checkpoint_path))
 
     metric_maps = create_metric_map(config)
