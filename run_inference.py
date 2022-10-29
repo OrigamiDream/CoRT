@@ -30,10 +30,17 @@ def parse_tfrecords(args):
             example[name] = tensor
         return example
 
+    def _reshape_and_splits_example(example):
+        sections = tf.reshape(example['sections'], (-1,))
+        labels = tf.reshape(example['labels'], (-1,))
+        return example['input_ids'], (sections, labels)
+
     fname = args.tfrecord_path.format(model_name=args.model_name.replace('/', '_'))
     logging.info('Parsing TFRecords from {}'.format(fname))
 
     dataset = tf.data.TFRecordDataset(fname).map(_parse_feature_desc).batch(args.batch_size)
+    dataset = dataset.map(_reshape_and_splits_example)
+
     num_steps = 0
     for _ in dataset:
         num_steps += 1
@@ -47,7 +54,7 @@ def main():
     parser.add_argument('--checkpoint_path', required=True,
                         help='Location of trained model checkpoint.')
     parser.add_argument('--model_name', default='klue/roberta-base',
-                        help='Name of pre-trained models. (korscibert, korscielectra, huggingface models)')
+                        help='Name of pre-trained models. (One of korscibert, korscielectra, huggingface models)')
     parser.add_argument('--tfrecord_path', default='./data/tfrecords/{model_name}/eval.tfrecord',
                         help='Location of TFRecord file for inference. {model_name} is a placeholder.')
     parser.add_argument('--repr_classifier', default='seq_cls',
