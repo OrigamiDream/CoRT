@@ -146,11 +146,18 @@ I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (
 | KorSci-BERT       | 14,237          | 9,077,386    | 0.001568     |
 | KorSci-ELECTRA    | 7,345,917       | 8,621,489    | **0.852047** |
 
+### Performance
 
+[LAN (Label Attention Network)](https://aida.kisti.re.kr/gallery/17) has been proposed in [2021 KISTI AI/ML Competition](https://aida.kisti.re.kr/notice/7).
 
-### Results
+| Model                             | Macro F1-score | Micro F1-score | Accuracy  |
+|-----------------------------------|----------------|----------------|-----------|
+| LAN (KorSci-BERT), baseline       | 89.95          | -              | -         |
+| LAN (KLUE RoBERTA base), baseline | 89.77          | -              | -         |
+| CoRT (KLUE RoBERTA base)          | **90.50**      | 90.17          | 90.17     |
+| CoRT (KorSci-BERT)                | 90.42          | **90.25**      | **90.25** |
 
-Results are not yet available because the competition is not finished.
+The dataset has class imbalance, therefore `micro f1-score` that takes class imbalance into account is more reliable than `macro f1-score` and `accuracy`.
 
 ### Acknowledgement
 
