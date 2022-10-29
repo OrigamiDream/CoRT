@@ -46,7 +46,6 @@ def parse_tfrecords(args):
     for _ in dataset:
         num_steps += 1
 
-    num_steps *= args.batch_size
     return dataset, num_steps
 
 
