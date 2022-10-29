@@ -137,6 +137,7 @@ def main():
     parser.add_argument('--korscielectra_ckpt', default='./cort/pretrained/korscielectra/data/models/korsci_base')
     parser.add_argument('--repr_finetune', default=True, type=bool)
     parser.add_argument('--repr_preact', default=True, type=bool)
+    parser.add_argument('--loss_base', default='supervised')
     parser.add_argument('--classifier_dropout_prob', default=0.1, type=float)
     parser.add_argument('--backbone_trainable_layers', default=0, type=float)
 
