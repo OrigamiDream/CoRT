@@ -151,3 +151,22 @@ I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (
 ### Results
 
 Results are not yet available because the competition is not finished.
+
+### Acknowledgement
+
+CoRT was created with GPU support from the [**KISTI National Supercomputing Center (KSC) Neuron**](https://www.ksc.re.kr/ggspcpt/neuron) free trial.
+Also, 2 NVIDIA A100 GPUs have been used for Pre-training, and 2 NVIDIA V100 GPUs have been used for Fine-tuning.
+
+### Citation
+
+If you use this code for research, please cite:
+```bibtex
+@misc{CoRT2022,
+    author = {OrigamiDream},
+    title = {CoRT: Contrastive Rhetorical Tagging},
+    year = {2022},
+    publisher = {GitHub},
+    journal = {GitHub Repository},
+    howpublished = {\url(https://github.com/OrigamiDream/CoRT)}
+}
+```
