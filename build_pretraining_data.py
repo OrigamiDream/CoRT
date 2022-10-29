@@ -66,7 +66,7 @@ def create_tfrecords(args, output_dir):
     sections = np.array(df['code_sections'].values, dtype=np.int32)
     labels = np.array(df['code_labels'].values, dtype=np.int32)
 
-    if args.test_size:
+    if args.test_size and args.test_size < 1.0:
         splits = train_test_split(input_ids, sections, labels,
                                   test_size=args.test_size, random_state=args.seed, shuffle=True, stratify=labels)
         train_input_ids, test_input_ids, train_sections, test_sections, train_labels, test_labels = splits
@@ -77,6 +77,10 @@ def create_tfrecords(args, output_dir):
         input_ids = train_input_ids
         sections = train_sections
         labels = train_labels
+    elif args.test_size and args.test_size == 1.0:
+        fname = os.path.join(output_dir, 'eval.tfrecord')
+        write_examples(fname, input_ids, sections, labels)
+        return
 
     fold = StratifiedKFold(n_splits=args.num_k_fold, shuffle=True, random_state=args.seed)
     for index, (train_indices, valid_indices) in enumerate(fold.split(input_ids, labels)):
