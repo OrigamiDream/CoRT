@@ -101,8 +101,6 @@ def main():
                         help='Number of representation dense units')
     parser.add_argument('--num_labels', default=9, type=int,
                         help='Number of labels')
-    parser.add_argument('--seed', default=42, type=int,
-                        help='A seed of random state.')
 
     # Configurable pre-defined variables
     parser.add_argument('--korscibert_vocab', default='./cort/pretrained/korscibert/vocab_kisti.txt')
