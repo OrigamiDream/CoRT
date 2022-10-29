@@ -1,6 +1,9 @@
+import os
+import json
 import logging
 import argparse
-
+import numpy as np
+import pandas as pd
 import tensorflow as tf
 
 from cort.config import Config
@@ -54,6 +57,21 @@ def eval_one_step(model, inputs):
     return model(inputs, training=False)
 
 
+def create_scatter_representation_table(representations, labels):
+    representations = np.concatenate(representations, axis=0)
+    labels = np.concatenate(labels, axis=0)
+    labels = np.reshape(labels, (-1, 1))
+
+    embedding_size = representations.shape[1]
+    columns = ['labels'] + ['e{}'.format(i) for i in range(embedding_size)]
+    embeddings = np.concatenate([labels, representations], axis=-1)
+
+    df = pd.DataFrame(embeddings, columns=columns)
+    df['labels'] = df['labels'].astype(int).astype(str)
+
+    return df
+
+
 def create_metric_map(config):
     metric_map = dict()
     metric_map['loss'] = metrics.Mean(name='loss')
@@ -65,10 +83,14 @@ def create_metric_map(config):
     )
     metric_map['macro_f1_score'] = metrics_tfa.F1Score(
         name='macro_f1_score', num_classes=config.num_labels, average='macro')
+
+    if config.repr_finetune:
+        metric_map['co_loss'] = metrics.Mean(name='co_loss')
+        metric_map['cce_loss'] = metrics.Mean(name='cce_loss')
     return metric_map
 
 
-def metric_fn(dicts, cort_outputs):
+def metric_fn(dicts, cort_outputs, config):
     d = cort_outputs
     confusion_keys = ['accuracy', 'recall', 'precision',
                       'micro_f1_score', 'macro_f1_score']
@@ -77,6 +99,10 @@ def metric_fn(dicts, cort_outputs):
             y_true=d['ohe_labels'],
             y_pred=d['probs']
         )
+
+    if config.repr_finetune:
+        dicts['co_loss'].update_state(values=d['co_loss'])
+        dicts['cce_loss'].update_state(values=d['cce_loss'])
 
 
 def main():
@@ -87,6 +113,8 @@ def main():
                         help='Name of pre-trained models. (One of korscibert, korscielectra, huggingface models)')
     parser.add_argument('--tfrecord_path', default='./data/tfrecords/{model_name}/eval.tfrecord',
                         help='Location of TFRecord file for inference. {model_name} is a placeholder.')
+    parser.add_argument('--outputs_dir', default='./eval-outputs',
+                        help='Location of results from model inference')
     parser.add_argument('--repr_classifier', default='seq_cls',
                         help='Name of classifier head for classifier. (One of seq_cls and bi_lstm is allowed)')
     parser.add_argument('--repr_act', default='tanh',
@@ -107,6 +135,7 @@ def main():
     parser.add_argument('--korscibert_ckpt', default='./cort/pretrained/korscibert/model.ckpt-262500')
     parser.add_argument('--korscielectra_vocab', default='./cort/pretrained/korscielectra/data/vocab.txt')
     parser.add_argument('--korscielectra_ckpt', default='./cort/pretrained/korscielectra/data/models/korsci_base')
+    parser.add_argument('--repr_finetune', default=True, type=bool)
     parser.add_argument('--repr_preact', default=True, type=bool)
     parser.add_argument('--classifier_dropout_prob', default=0.1, type=float)
     parser.add_argument('--backbone_trainable_layers', default=0, type=float)
@@ -137,11 +166,18 @@ def main():
     logging.info('  Num of concatenating hidden states = {}'.format(args.concat_hidden_states))
 
     progbar = Progbar(num_steps, stateful_metrics=[metric.name for metric in metric_maps.values()])
+    representations = []
+    labels = []
     for step, inputs in enumerate(dataset):
         loss, cort_outputs = eval_one_step(model, inputs)
 
         metric_maps['loss'].update_state(values=loss)
-        metric_fn(metric_maps, cort_outputs)
+        metric_fn(metric_maps, cort_outputs, config)
+
+        if 'representation' in cort_outputs:
+            representations.append(cort_outputs['representation'].numpy())
+            labels.append(cort_outputs['labels'].numpy())
+
         progbar.update(step, values=[
             (metric_name, float(metric.result().numpy())) for metric_name, metric in metric_maps.items()
         ])
@@ -153,6 +189,22 @@ def main():
     logging.info('***** Evaluation results *****')
     for metric_name, metric in metric_maps.items():
         logging.info('  {}: {:.06f}'.format(metric_name, metric.result().numpy()))
+
+    os.makedirs(args.outputs_dir, exist_ok=True)
+
+    model_name = args.model_name.replace('/', '_')
+    repr_table = create_scatter_representation_table(representations, labels)
+    fname = os.path.join(args.outputs_dir, '{}_representations.csv'.format(model_name))
+    repr_table.to_csv(fname, index=False)
+    logging.info('Exported representations to {}'.format(fname))
+
+    fname = os.path.join(args.outputs_dir, '{}_eval_outputs.json'.format(model_name))
+    body = {
+        metric_name: float(metric.result().numpy()) for metric_name, metric in metric_maps.items()
+    }
+    with open(fname, 'w') as f:
+        json.dump(body, f, indent=4, sort_keys=True)
+    logging.info('Exported eval outputs to {}'.format(fname))
     logging.info('Finishing all jobs')
 
 
