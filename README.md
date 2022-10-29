@@ -135,6 +135,23 @@ It has the following arguments:
 - `--repr_finetune`: Boolean when you want to fine-tune the model with additional Representation Learning. (`False` as default) 
 - `--include_sections`: Boolean when you want to use 'representation logits of sections' on label representation logits. (`False` as default. `--repr_finetune True` is required for this)
 
+### Inference
+
+Use `run_inference.py` to perform inference on fine-tuned models.
+It has the following arguments:
+- `--checkpoint_path`: Location of trained model checkpoint. (Required)
+- `--model_name`: Name of pre-trained models. (One of korscibert, korscielectra, huggingface models is allowed)
+- `--tfrecord_path`: Location of TFRecord file for inference. {model_name} is a placeholder.
+- `--repr_classifier`: Name of classification head for classifier. (One of 'seq_cls' and 'bi_lstm' is allowed)
+- `--repr_act`: Name of activation function for representation. (One of 'tanh' and 'gelu' is allowed)
+- `--concat_hidden_states`: Number of hidden states to concatenate. (1 as default)
+- `--batch_size`: Number of batch size. (64 as default)
+- `--max_position_embeddings`: Number of maximum position embeddings. (512 as default)
+- `--repr_size`: Number of representation dense units. (1024 as default)
+- `--num_labels`: Number of labels. (9 as default)
+
+Perform inference for metrics by (for example) `python run_inference.py --checkpoint_path ./finetuning-checkpoints/wandb_run_id/ckpt-0 --tfrecord_path ./data/tfrecords/{model_name}/valid.fold-1-of-10.tfrecord --concat_hidden_states 2 --repr_act tanh --repr_classifier bi_lstm --repr_size 1024`.<br>
+`--concat_hidden_states`, `--repr_act`, `--repr_classifier`, `--repr_size` must be same with configurations that used for fine-tuned model's architecture. 
 
 ### Notes
 
