@@ -7,6 +7,7 @@ from cort.config import Config
 from cort.modeling import CortForSequenceClassification
 from utils import utils, formatting_utils
 from tensorflow.keras import metrics
+from tensorflow.keras.utils import Progbar
 from tensorflow_addons import metrics as metrics_tfa
 
 formatting_utils.setup_formatter(logging.INFO)
@@ -47,6 +48,36 @@ def parse_tfrecords(args):
 
     num_steps *= args.batch_size
     return dataset, num_steps
+
+
+@tf.function
+def eval_one_step(model, inputs):
+    return model(inputs, training=False)
+
+
+def create_metric_map(config):
+    metric_map = dict()
+    metric_map['loss'] = metrics.Mean(name='loss')
+    metric_map['accuracy'] = metrics.CategoricalAccuracy(name='accuracy')
+    metric_map['recall'] = metrics.Recall(name='recall')
+    metric_map['precision'] = metrics.Precision(name='precision')
+    metric_map['micro_f1_score'] = metrics_tfa.F1Score(
+        name='micro_f1_score', num_classes=config.num_labels, average='micro'
+    )
+    metric_map['macro_f1_score'] = metrics_tfa.F1Score(
+        name='macro_f1_score', num_classes=config.num_labels, average='macro')
+    return metric_map
+
+
+def metric_fn(dicts, cort_outputs):
+    d = cort_outputs
+    confusion_keys = ['accuracy', 'recall', 'precision',
+                      'micro_f1_score', 'macro_f1_score']
+    for key in confusion_keys:
+        dicts[key].update_state(
+            y_true=d['ohe_labels'],
+            y_pred=d['probs']
+        )
 
 
 def main():
@@ -97,14 +128,9 @@ def main():
     checkpoint.restore(args.checkpoint_path)
     logging.info('Restored model checkpoint from {}'.format(args.checkpoint_path))
 
-    metrics_array = [
-        metrics.CategoricalAccuracy(name='accuracy'),
-        metrics.Recall(name='recall'),
-        metrics.Precision(name='precision'),
-        metrics_tfa.F1Score(name='micro_f1_score', num_classes=config.num_labels, average='micro'),
-        metrics_tfa.F1Score(name='macro_f1_score', num_classes=config.num_labels, average='macro')
-    ]
-    model.compile(loss=model.loss_fn, metrics=metrics_array)
+    metric_maps = create_metric_map(config)
+    compile_metric_names = ['accuracy', 'recall', 'precision', 'micro_f1_score', 'macro_f1_score']
+    model.compile(loss=model.loss_fn, metrics=[metric_maps[name] for name in compile_metric_names])
 
     logging.info('***** Inference *****')
     logging.info('  Model name = {}'.format(args.model_name))
@@ -113,16 +139,24 @@ def main():
     logging.info('  Repr activation = {}'.format(args.repr_act))
     logging.info('  Num of concatenating hidden states = {}'.format(args.concat_hidden_states))
 
-    outputs = model.evaluate(dataset, steps=num_steps)
+    progbar = Progbar(num_steps, stateful_metrics=[metric.name for metric in metric_maps.values()])
+    for step, inputs in enumerate(dataset):
+        loss, cort_outputs = eval_one_step(model, inputs)
 
-    cce_loss = outputs[0]
-    metrics_map = {
-        metric.name: output for output, metric in zip(outputs[1:], metrics_array)
-    }
+        metric_maps['loss'].update_state(values=loss)
+        metric_fn(metric_maps, cort_outputs)
+        progbar.update(step, values=[
+            (metric_name, float(metric.result().numpy())) for metric_name, metric in metric_maps.items()
+        ])
+    progbar.update(
+        current=num_steps,
+        values=[(metric_name, float(metric.result().numpy())) for metric_name, metric in metric_maps.items()],
+        finalize=True
+    )
     logging.info('***** Evaluation results *****')
-    logging.info('  loss: {:.06f}'.format(cce_loss))
-    for metric_name, value in metrics_map.items():
-        logging.info('  {}: {:.06f}'.format(metric_name, value))
+    for metric_name, metric in metric_maps.items():
+        logging.info('  {}: {:.06f}'.format(metric_name, metric.result().numpy()))
+    logging.info('Finishing all jobs')
 
 
 if __name__ == '__main__':
