@@ -201,6 +201,8 @@ def perform_interactive_predictions(config, model):
         return
 
     tokenizer = utils.create_tokenizer_from_config(config)
+    if hasattr(tokenizer, 'disable_progressbar'):
+        tokenizer.disable_progressbar = True
 
     print('You can perform inference interactively here, `q` to end the process')
     while True:

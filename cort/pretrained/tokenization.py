@@ -6,6 +6,7 @@ class TokenizerDelegate:
 
     def __init__(self, delegate, max_length: int = 512):
         self.delegate = delegate
+        self.disable_progressbar = False
         self.max_length = max_length
         self.cls_token_id = self.delegate.convert_tokens_to_ids(['[CLS]'])[0]
         self.sep_token_id = self.delegate.convert_tokens_to_ids(['[SEP]'])[0]
@@ -36,7 +37,7 @@ class TokenizerDelegate:
             'attention_mask': [],
             'token_type_ids': []
         }
-        for text in tqdm(texts, desc='Tokenizing', ncols=120):
+        for text in tqdm(texts, desc='Tokenizing', ncols=120, disable=self.disable_progressbar):
             # tokenize to token_ids
             tokens = self.tokenize(text)
             tokens = self.convert_tokens_to_ids(tokens)
