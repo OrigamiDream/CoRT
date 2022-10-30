@@ -8,6 +8,7 @@ notebooks/
 wandb/
 models/
 checkpoints/
+eval-outputs/
 pretraining-checkpoints/
 finetuning-checkpoints/
 cort/pretrained/korscibert
