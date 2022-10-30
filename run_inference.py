@@ -91,8 +91,12 @@ def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
                 unicodes.append(unicode)
         return ''.join(unicodes)
 
+    def colorize(text, attention_score, c1=(255, 0, 0), c2=(0, 255, 0)):
+        color = (1 - attention_score) * np.array(list(c1)) + attention_score * np.array(list(c2))
+        return '\033[38;2;{};{};{}m{}\033[0m'.format(int(color[0]), int(color[1]), int(color[2]), text)
+
     ComposedToken = collections.namedtuple('ComposedToken', [
-        'matched', 'text', 'token', 'token_index', 'correlation_score', 'correlation_unicode'
+        'matched', 'text', 'colorized_text', 'token', 'token_index', 'correlation_score', 'correlation_unicode'
     ])
 
     length = np.sum(input_ids != tokenizer.pad_token_id)
@@ -120,6 +124,7 @@ def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
                 composed_tokens.append(ComposedToken(
                     matched=True,
                     text=word,
+                    colorized_text=colorize(word, score),
                     token=token,
                     token_index=i,
                     correlation_score=score,
@@ -131,6 +136,7 @@ def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
                 composed_tokens.append(ComposedToken(
                     matched=False,
                     text=' ',
+                    colorized_text=' ',
                     token=None,
                     token_index=-1,
                     correlation_score=-1,
@@ -220,7 +226,7 @@ def perform_interactive_predictions(config, model):
         index = np.argmax(probs)
         print('\nCorrelations:')
         print(''.join([composed.correlation_unicode for composed in composed_tokens]))
-        print(orig)
+        print(''.join([composed.colorized_text for composed in composed_tokens]))
         print('\nPrediction: {}: ({:.06f} of confidence score)'.format(LABEL_NAMES[index], probs[index]))
         print()
 
