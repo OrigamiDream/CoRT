@@ -1,7 +1,9 @@
 import os
+import re
 import json
 import logging
 import argparse
+import collections
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -14,6 +16,10 @@ from tensorflow.keras.utils import Progbar
 from tensorflow_addons import metrics as metrics_tfa
 
 formatting_utils.setup_formatter(logging.INFO)
+
+
+KOREAN_PATTERN = re.compile('[ㄱ-ㅎ가-힣]')
+CORRELATION_SCORE_UNICODES = ' ▁▂▃▄▅▆▇█'
 
 
 def parse_tfrecords(args):
@@ -55,6 +61,82 @@ def parse_tfrecords(args):
 @tf.function
 def eval_one_step(model, inputs):
     return model(inputs, training=False)
+
+
+def calc_correlation_from_attentions(input_ids, attentions, tokenizer):
+    length = np.sum(input_ids != tokenizer.pad_token_id)
+
+    attention_maps = []
+    for attention in attentions:
+        reduced = tf.reduce_mean(attention, axis=1)
+        reduced = reduced[:, :length - 1, :length - 1]
+        attention_maps.append(reduced)
+
+    reduced_attention = tf.concat(attention_maps, axis=0)
+    reduced_attention = tf.reduce_mean(reduced_attention, axis=0)
+
+    correlation = reduced_attention[0, 1:]
+    correlation = (correlation - tf.reduce_min(correlation)) / (tf.reduce_max(correlation) - tf.reduce_min(correlation))
+    return correlation.numpy()
+
+
+def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
+    def build_score_unicodes(word_slice, score_index):
+        unicodes = []
+        for char in word_slice:
+            unicode = CORRELATION_SCORE_UNICODES[score_index]
+            if KOREAN_PATTERN.match(char):
+                unicodes.append(unicode * 2)
+            else:
+                unicodes.append(unicode)
+        return ''.join(unicodes)
+
+    ComposedToken = collections.namedtuple('ComposedToken', [
+        'matched', 'text', 'token', 'token_index', 'correlation_score', 'correlation_unicode'
+    ])
+
+    length = np.sum(input_ids != tokenizer.pad_token_id)
+    tokens = tokenizer.convert_ids_to_tokens(input_ids[0, 1:length - 1])  # remove [CLS], [SEP], [PAD]
+    correlations = calc_correlation_from_attentions(input_ids, attentions, tokenizer)
+
+    offset = 0
+    maxlen = len(sentence)
+    composed_tokens = []
+    for i, token in enumerate(tokens):
+        while True:
+            matched = True
+            if token.startswith('##'):
+                matched = sentence[offset - 1] != ' '  # previous letter must not be space
+                token = token[2:]
+
+            word = sentence[offset:offset + min(len(token), maxlen)]
+            matched = matched and token == word.lower()
+
+            if matched:
+                offset += len(token)
+                score = correlations[i]
+                unicode_index = int(score * (len(CORRELATION_SCORE_UNICODES) - 1))
+
+                composed_tokens.append(ComposedToken(
+                    matched=True,
+                    text=word,
+                    token=token,
+                    token_index=i,
+                    correlation_score=score,
+                    correlation_unicode=build_score_unicodes(word, unicode_index)
+                ))
+                break
+            else:
+                offset += 1
+                composed_tokens.append(ComposedToken(
+                    matched=False,
+                    text=' ',
+                    token=None,
+                    token_index=-1,
+                    correlation_score=-1,
+                    correlation_unicode=' '
+                ))
+    return composed_tokens
 
 
 def create_scatter_representation_table(representations, labels):
@@ -120,6 +202,7 @@ def perform_interactive_predictions(config, model):
         if sentence == 'q':
             break
 
+        orig = sentence
         sentence = normalize_texts(sentence)
         sentence = sentence.lower()
 
@@ -131,9 +214,15 @@ def perform_interactive_predictions(config, model):
         input_ids = np.array(tokenized['input_ids'], dtype=np.int32)
         _, cort_outputs = model(input_ids, training=False)
 
+        composed_tokens = compose_tokens_correlations(orig, input_ids, cort_outputs['attentions'], tokenizer)
+
         probs = cort_outputs['probs'][0]
         index = np.argmax(probs)
-        print('Prediction: {}: ({:.06f} of confidence score)'.format(LABEL_NAMES[index], probs[index]))
+        print('\nCorrelations:')
+        print(''.join([composed.correlation_unicode for composed in composed_tokens]))
+        print(orig)
+        print('\nPrediction: {}: ({:.06f} of confidence score)'.format(LABEL_NAMES[index], probs[index]))
+        print()
 
 
 def perform_inference(args, config, model):

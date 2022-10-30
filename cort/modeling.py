@@ -272,7 +272,8 @@ class CortForElaboratedSequenceClassification(models.Model):
             'section_labels': sections,
             'section_logits': section_logits,
             'section_probs': section_probs,
-            'section_ohe_labels': section_ohe_labels
+            'section_ohe_labels': section_ohe_labels,
+            'attentions': outputs.attentions
         }
 
         # Compute Losses
@@ -345,7 +346,8 @@ class CortForSequenceClassification(models.Model):
             'logits': logits,
             'probs': probs,
             'labels': labels,
-            'ohe_labels': ohe_labels
+            'ohe_labels': ohe_labels,
+            'attentions': outputs.attentions
         }
 
         # Compute Losses
@@ -392,6 +394,7 @@ class CortMainLayer(layers.Layer):
                                      attention_mask=attention_mask,
                                      token_type_ids=token_type_ids,
                                      output_hidden_states=True,
+                                     output_attentions=True,
                                      training=training)
         return hidden_state
 
