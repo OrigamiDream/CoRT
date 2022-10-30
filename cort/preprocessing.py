@@ -81,6 +81,7 @@ def parse_and_preprocess_sentences(filepath: str) -> pd.DataFrame:
 def normalize_texts(sentence,
                     filter_specials=True,
                     remove_specials=True,
+                    remove_last_period=True,
                     filter_characters=True,
                     filter_urls=True,
                     filter_tags=True,
@@ -94,6 +95,8 @@ def normalize_texts(sentence,
             sentence = sentence.replace(before, ' ' if remove_specials else after)
         for before, after in SPECIAL_CHAR_REPLACEMENTS:
             sentence = sentence.replace(before, after)
+    if remove_last_period and sentence.endswith('.'):
+        sentence = sentence[:-1]
     if filter_characters:
         sentence = CHARACTER_FILTER_PATTERN.sub(' ', sentence)
     if filter_urls:
