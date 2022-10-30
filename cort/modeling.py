@@ -22,14 +22,15 @@ def get_initializer(initializer_range=0.02):
 
 def unwrap_inputs_with_class_weight(inputs):
     labels = cw = None
-    if len(inputs) == 1:
-        input_ids = inputs
-    elif len(inputs) == 2:
-        input_ids, labels = inputs
-    elif len(inputs) == 3:
-        input_ids, labels, cw = inputs
+    if isinstance(inputs, list) or isinstance(inputs, tuple):
+        if len(inputs) == 2:
+            input_ids, labels = inputs
+        elif len(inputs) == 3:
+            input_ids, labels, cw = inputs
+        else:
+            raise ValueError('Number of inputs must be 1, 2 and 3')
     else:
-        raise ValueError('Number of inputs must be 1, 2 and 3')
+        input_ids = inputs
 
     if labels is None:
         labels = (None, None)
@@ -351,7 +352,7 @@ class CortForSequenceClassification(models.Model):
         cce_loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
 
         total_loss = cce_loss
-        if self.config.repr_finetune:
+        if self.config.repr_finetune and (labels is not None or sections is not None):
             if labels is not None and self.config.loss_base == 'margin':
                 co_loss = calc_margin_based_contrastive_loss(representation, labels)
             elif labels is not None and self.config.loss_base == 'supervised':

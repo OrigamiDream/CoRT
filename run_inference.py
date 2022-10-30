@@ -105,55 +105,39 @@ def metric_fn(dicts, cort_outputs, config):
         dicts['cce_loss'].update_state(values=d['cce_loss'])
 
 
-def main():
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--checkpoint_path', required=True,
-                        help='Location of trained model checkpoint.')
-    parser.add_argument('--model_name', default='klue/roberta-base',
-                        help='Name of pre-trained models. (One of korscibert, korscielectra, huggingface models)')
-    parser.add_argument('--tfrecord_path', default='./data/tfrecords/{model_name}/eval.tfrecord',
-                        help='Location of TFRecord file for inference. {model_name} is a placeholder.')
-    parser.add_argument('--outputs_dir', default='./eval-outputs',
-                        help='Location of results from model inference')
-    parser.add_argument('--repr_classifier', default='seq_cls',
-                        help='Name of classifier head for classifier. (One of seq_cls and bi_lstm is allowed)')
-    parser.add_argument('--repr_act', default='tanh',
-                        help='Name of activation function for representation. (One of tanh and gelu is allowed)')
-    parser.add_argument('--concat_hidden_states', default=1, type=int,
-                        help='Number of hidden states to concatenate.')
-    parser.add_argument('--batch_size', default=64, type=int,
-                        help='Number of batch size.')
-    parser.add_argument('--max_position_embeddings', default=512, type=int,
-                        help='Number of maximum position embeddings.')
-    parser.add_argument('--repr_size', default=1024, type=int,
-                        help='Number of representation dense units')
-    parser.add_argument('--num_labels', default=9, type=int,
-                        help='Number of labels')
+def perform_interactive_predictions(config, model):
+    try:
+        from cort.preprocessing import run_multiprocessing_job, normalize_texts, LABEL_NAMES
+    except ImportError as e:
+        logging.error(e)
+        return
 
-    # Configurable pre-defined variables
-    parser.add_argument('--korscibert_vocab', default='./cort/pretrained/korscibert/vocab_kisti.txt')
-    parser.add_argument('--korscibert_ckpt', default='./cort/pretrained/korscibert/model.ckpt-262500')
-    parser.add_argument('--korscielectra_vocab', default='./cort/pretrained/korscielectra/data/vocab.txt')
-    parser.add_argument('--korscielectra_ckpt', default='./cort/pretrained/korscielectra/data/models/korsci_base')
-    parser.add_argument('--repr_finetune', default=True, type=bool)
-    parser.add_argument('--repr_preact', default=True, type=bool)
-    parser.add_argument('--loss_base', default='supervised')
-    parser.add_argument('--classifier_dropout_prob', default=0.1, type=float)
-    parser.add_argument('--backbone_trainable_layers', default=0, type=float)
+    tokenizer = utils.create_tokenizer_from_config(config)
 
-    # Parse arguments
-    args = parser.parse_args()
-    config = Config(**vars(args))
-    config.pretrained_config = utils.parse_pretrained_config(config)
+    print('You can perform inference interactively here, `q` to end the process')
+    while True:
+        sentence = input('\nSentence: ')
+        if sentence == 'q':
+            break
 
+        sentence = normalize_texts(sentence)
+        sentence = sentence.lower()
+
+        tokenized = tokenizer([sentence],
+                              padding='max_length',
+                              truncation=True,
+                              return_attention_mask=False,
+                              return_token_type_ids=False)
+        input_ids = np.array(tokenized['input_ids'], dtype=np.int32)
+        _, cort_outputs = model(input_ids, training=False)
+
+        probs = cort_outputs['probs'][0]
+        index = np.argmax(probs)
+        print('Prediction: {}: ({:.06f} of confidence score)'.format(LABEL_NAMES[index], probs[index]))
+
+
+def perform_inference(args, config, model):
     dataset, num_steps = parse_tfrecords(args)
-
-    model = CortForSequenceClassification(config, num_labels=config.num_labels)
-    model.trainable = False
-
-    checkpoint = tf.train.Checkpoint(model=model)
-    checkpoint.restore(args.checkpoint_path).expect_partial()
-    logging.info('Restored model checkpoint from {}'.format(args.checkpoint_path))
 
     metric_maps = create_metric_map(config)
     compile_metric_names = ['accuracy', 'recall', 'precision', 'micro_f1_score', 'macro_f1_score']
@@ -206,6 +190,63 @@ def main():
     with open(fname, 'w') as f:
         json.dump(body, f, indent=4, sort_keys=True)
     logging.info('Exported eval outputs to {}'.format(fname))
+
+
+def main():
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('--checkpoint_path', required=True,
+                        help='Location of trained model checkpoint.')
+    parser.add_argument('--model_name', default='klue/roberta-base',
+                        help='Name of pre-trained models. (One of korscibert, korscielectra, huggingface models)')
+    parser.add_argument('--tfrecord_path', default='./data/tfrecords/{model_name}/eval.tfrecord',
+                        help='Location of TFRecord file for inference. {model_name} is a placeholder.')
+    parser.add_argument('--outputs_dir', default='./eval-outputs',
+                        help='Location of results from model inference')
+    parser.add_argument('--repr_classifier', default='seq_cls',
+                        help='Name of classifier head for classifier. (One of seq_cls and bi_lstm is allowed)')
+    parser.add_argument('--repr_act', default='tanh',
+                        help='Name of activation function for representation. (One of tanh and gelu is allowed)')
+    parser.add_argument('--concat_hidden_states', default=1, type=int,
+                        help='Number of hidden states to concatenate.')
+    parser.add_argument('--batch_size', default=64, type=int,
+                        help='Number of batch size.')
+    parser.add_argument('--max_position_embeddings', default=512, type=int,
+                        help='Number of maximum position embeddings.')
+    parser.add_argument('--repr_size', default=1024, type=int,
+                        help='Number of representation dense units')
+    parser.add_argument('--num_labels', default=9, type=int,
+                        help='Number of labels')
+    parser.add_argument('--interactive', default=False, type=bool,
+                        help='Interactive mode for real-time inference')
+
+    # Configurable pre-defined variables
+    parser.add_argument('--korscibert_vocab', default='./cort/pretrained/korscibert/vocab_kisti.txt')
+    parser.add_argument('--korscibert_ckpt', default='./cort/pretrained/korscibert/model.ckpt-262500')
+    parser.add_argument('--korscielectra_vocab', default='./cort/pretrained/korscielectra/data/vocab.txt')
+    parser.add_argument('--korscielectra_ckpt', default='./cort/pretrained/korscielectra/data/models/korsci_base')
+    parser.add_argument('--repr_finetune', default=True, type=bool)
+    parser.add_argument('--repr_preact', default=True, type=bool)
+    parser.add_argument('--loss_base', default='supervised')
+    parser.add_argument('--classifier_dropout_prob', default=0.1, type=float)
+    parser.add_argument('--backbone_trainable_layers', default=0, type=float)
+
+    # Parse arguments
+    args = parser.parse_args()
+    config = Config(**vars(args))
+    config.pretrained_config = utils.parse_pretrained_config(config)
+
+    model = CortForSequenceClassification(config, num_labels=config.num_labels)
+    model.trainable = False
+
+    checkpoint = tf.train.Checkpoint(model=model)
+    checkpoint.restore(args.checkpoint_path).expect_partial()
+    logging.info('Restored model checkpoint from {}'.format(args.checkpoint_path))
+
+    if args.interactive:
+        logging.info('Interactive mode enabled')
+        perform_interactive_predictions(config, model)
+    else:
+        perform_inference(args, config, model)
     logging.info('Finishing all jobs')
 
 
