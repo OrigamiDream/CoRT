@@ -169,8 +169,8 @@ I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (
 
 | Model                             | Macro F1-score | Micro F1-score | Accuracy  |
 |-----------------------------------|----------------|----------------|-----------|
-| LAN (KorSci-BERT), baseline       | 89.95          | -              | -         |
-| LAN (KLUE RoBERTA base), baseline | 89.77          | -              | -         |
+| LAN (KorSci-BERT), baseline       | 89.95          | -              | 89.76     |
+| LAN (KLUE RoBERTA base), baseline | 89.77          | -              | 89.85     |
 | CoRT (KLUE RoBERTA base)          | **90.50**      | 90.17          | 90.17     |
 | CoRT (KorSci-BERT)                | 90.42          | **90.25**      | **90.25** |
 
