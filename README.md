@@ -60,8 +60,9 @@ The paper suggests training strategy, by pulling together in the same-level cate
 
 All prerequisites must be up-to-date.
 W&B is always required to run pre-training and fine-tuning scripts.
-Requiring to use Python 3.8 or above.
+Requiring to use Python 3.8 or above and CUDA 11.4 or above.
 
+Install following main packages by manually, or use `requirements.txt`
 ```bash
 - tensorflow
 - tensorflow_addons
@@ -72,6 +73,9 @@ Requiring to use Python 3.8 or above.
 - pandas
 - konlpy 
 - soynlp
+```
+```bash
+pip install -r requirements.txt
 ```
 
 ### Pre-training
