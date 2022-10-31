@@ -170,7 +170,7 @@ I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (
 ### Performance
 
 [LAN (Label Attention Network)](https://aida.kisti.re.kr/gallery/17) has been proposed in [2021 KISTI AI/ML Competition](https://aida.kisti.re.kr/notice/7).<br>
-[Sentence Concat](https://koreascience.kr/article/CFKO202130060700830.pdf) and [Encoder Concat](https://koreascience.kr/article/CFKO202130060700830.pdf) have been proposed by Chaongwon National Univ. and KISTI Researchers
+[Sentence Concat](https://koreascience.kr/article/CFKO202130060700830.pdf) and [Encoder Concat](https://koreascience.kr/article/CFKO202130060700830.pdf) have been proposed by Changwon National Univ. and KISTI Researchers
 
 | Model                            | Macro F1-score | Accuracy  |
 |----------------------------------|----------------|-----------|
