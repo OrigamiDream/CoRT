@@ -91,12 +91,14 @@ def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
                 unicodes.append(unicode)
         return ''.join(unicodes)
 
-    def colorize(text, attention_score, c1=(255, 0, 0), c2=(0, 255, 0)):
+    def colorize(text, attention_score, c1=(150, 0, 0), c2=(0, 150, 0)):
         color = (1 - attention_score) * np.array(list(c1)) + attention_score * np.array(list(c2))
         return '\033[38;2;{};{};{}m{}\033[0m'.format(int(color[0]), int(color[1]), int(color[2]), text)
 
     ComposedToken = collections.namedtuple('ComposedToken', [
-        'matched', 'text', 'colorized_text', 'token', 'token_index', 'correlation_score', 'correlation_unicode'
+        'matched', 'text', 'colorized_text',
+        'token', 'token_index',
+        'correlation_score', 'correlation_unicode', 'colorized_correlation_unicode'
     ])
 
     length = np.sum(input_ids != tokenizer.pad_token_id)
@@ -107,20 +109,24 @@ def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
     maxlen = len(sentence)
     composed_tokens = []
     for i, token in enumerate(tokens):
-        while True:
+        is_last_token = i == len(tokens) - 1
+        while offset < len(sentence):
             matched = True
             if token.startswith('##'):
                 matched = sentence[offset - 1] != ' '  # previous letter must not be space
                 token = token[2:]
 
-            word = sentence[offset:offset + min(len(token), maxlen)]
+            if is_last_token:
+                word = sentence[offset:]
+            else:
+                word = sentence[offset:offset + min(len(token), maxlen)]
             matched = matched and token == word.lower()
 
             if matched:
                 offset += len(token)
                 score = correlations[i]
                 unicode_index = int(score * (len(CORRELATION_SCORE_UNICODES) - 1))
-
+                unicode_text = build_score_unicodes(word, unicode_index)
                 composed_tokens.append(ComposedToken(
                     matched=True,
                     text=word,
@@ -128,20 +134,23 @@ def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
                     token=token,
                     token_index=i,
                     correlation_score=score,
-                    correlation_unicode=build_score_unicodes(word, unicode_index)
+                    correlation_unicode=unicode_text,
+                    colorized_correlation_unicode=colorize(unicode_text, score)
                 ))
                 break
             else:
-                offset += 1
+                word = sentence[offset:] if is_last_token else sentence[offset]
                 composed_tokens.append(ComposedToken(
                     matched=False,
-                    text=' ',
-                    colorized_text=' ',
+                    text=word,
+                    colorized_text=colorize(word, 0),
                     token=None,
                     token_index=-1,
                     correlation_score=-1,
-                    correlation_unicode=' '
+                    correlation_unicode=' ',
+                    colorized_correlation_unicode=' '
                 ))
+                offset += len(word)
     return composed_tokens
 
 
@@ -227,7 +236,7 @@ def perform_interactive_predictions(config, model):
         probs = cort_outputs['probs'][0]
         index = np.argmax(probs)
         print('\nCorrelations:')
-        print(''.join([composed.correlation_unicode for composed in composed_tokens]))
+        print(''.join([composed.colorized_correlation_unicode for composed in composed_tokens]))
         print(''.join([composed.colorized_text for composed in composed_tokens]))
         print('\nPrediction: {}: ({:.06f} of confidence score)'.format(LABEL_NAMES[index], probs[index]))
         print()
