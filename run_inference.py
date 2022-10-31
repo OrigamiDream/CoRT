@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+from rich.console import Console
 from cort.config import Config
 from cort.modeling import CortForSequenceClassification
 from utils import utils, formatting_utils
@@ -16,6 +17,7 @@ from tensorflow.keras.utils import Progbar
 from tensorflow_addons import metrics as metrics_tfa
 
 formatting_utils.setup_formatter(logging.INFO)
+console = Console()
 
 
 KOREAN_PATTERN = re.compile('[ㄱ-ㅎ가-힣]')
@@ -93,7 +95,7 @@ def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
 
     def colorize(text, attention_score, c1=(150, 0, 0), c2=(0, 150, 0)):
         color = (1 - attention_score) * np.array(list(c1)) + attention_score * np.array(list(c2))
-        return '\033[38;2;{};{};{}m{}\033[0m'.format(int(color[0]), int(color[1]), int(color[2]), text)
+        return '[rgb({},{},{})]{}[reset]'.format(int(color[0]), int(color[1]), int(color[2]), text)
 
     ComposedToken = collections.namedtuple('ComposedToken', [
         'matched', 'text', 'colorized_text',
@@ -236,8 +238,8 @@ def perform_interactive_predictions(config, model):
         probs = cort_outputs['probs'][0]
         index = np.argmax(probs)
         print('\nCorrelations:')
-        print(''.join([composed.colorized_correlation_unicode for composed in composed_tokens]))
-        print(''.join([composed.colorized_text for composed in composed_tokens]))
+        console.print(''.join([composed.colorized_correlation_unicode for composed in composed_tokens]))
+        console.print(''.join([composed.colorized_text for composed in composed_tokens]))
         print('\nPrediction: {}: ({:.06f} of confidence score)'.format(LABEL_NAMES[index], probs[index]))
         print()
 
