@@ -169,16 +169,17 @@ I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (
 
 ### Performance
 
-[LAN (Label Attention Network)](https://aida.kisti.re.kr/gallery/17) has been proposed in [2021 KISTI AI/ML Competition](https://aida.kisti.re.kr/notice/7).
+[LAN (Label Attention Network)](https://aida.kisti.re.kr/gallery/17) has been proposed in [2021 KISTI AI/ML Competition](https://aida.kisti.re.kr/notice/7).<br>
+[Sentence Concat](https://koreascience.kr/article/CFKO202130060700830.pdf) and [Encoder Concat](https://koreascience.kr/article/CFKO202130060700830.pdf) have been proposed by Chaongwon National Univ. and KISTI Researchers
 
-| Model                             | Macro F1-score | Micro F1-score | Accuracy  |
-|-----------------------------------|----------------|----------------|-----------|
-| LAN (KorSci-BERT), baseline       | 89.95          | -              | 89.76     |
-| LAN (KLUE RoBERTA base), baseline | 89.77          | -              | 89.85     |
-| CoRT (KLUE RoBERTA base)          | **90.50**      | 90.17          | 90.17     |
-| CoRT (KorSci-BERT)                | 90.42          | **90.25**      | **90.25** |
-
-The dataset has class imbalance, therefore `micro f1-score` that takes class imbalance into account is more reliable than `macro f1-score` and `accuracy`.
+| Model                            | Macro F1-score | Accuracy  |
+|----------------------------------|----------------|-----------|
+| Sentence Concat (KLUE BERT base) | 70.85          | 88.77     |
+| Encoder Concat (KLUE BERT base)  | 71.91          | 88.59     |
+| LAN (KorSci-BERT)                | 89.95          | 89.76     |
+| LAN (KLUE RoBERTA base)          | 89.77          | 89.85     |
+| **CoRT (KLUE RoBERTA base)**     | **90.50**      | 90.17     |
+| **CoRT (KorSci-BERT)**           | 90.42          | **90.25** |
 
 CoRT shows better performance on overall scores comparing with baseline models despite its smaller model architecture.
 
@@ -200,3 +201,7 @@ If you use this code for research, please cite:
     howpublished = {\url(https://github.com/OrigamiDream/CoRT)}
 }
 ```
+
+### References
+- [Seong., "Rhetorical Sentence Classification Using Context Information", 2021](https://koreascience.kr/article/CFKO202130060700830.pdf)
+- 
