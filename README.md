@@ -157,16 +157,6 @@ It has the following arguments:
 Perform inference for metrics by (for example) `python run_inference.py --checkpoint_path ./finetuning-checkpoints/wandb_run_id/ckpt-0 --tfrecord_path ./data/tfrecords/{model_name}/valid.fold-1-of-10.tfrecord --concat_hidden_states 2 --repr_act tanh --repr_classifier bi_lstm --repr_size 1024`.<br>
 `--concat_hidden_states`, `--repr_act`, `--repr_classifier`, `--repr_size` must be same with configurations that used for fine-tuned model's architecture. 
 
-### Notes
-
-I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (about 85.2%).
-
-| Model             | Number of [UNK] | Total Tokens | [UNK] Rate   |
-|-------------------|-----------------|--------------|--------------|
-| klue/roberta-base | 2,734           | 9,269,131    | 0.000295     |
-| KorSci-BERT       | 14,237          | 9,077,386    | 0.001568     |
-| KorSci-ELECTRA    | 7,345,917       | 8,621,489    | **0.852047** |
-
 ### Performance
 
 [LAN (Label Attention Network)](https://aida.kisti.re.kr/gallery/17) has been proposed in [2021 KISTI AI/ML Competition](https://aida.kisti.re.kr/notice/7).<br>
@@ -187,6 +177,16 @@ CoRT shows better performance on overall scores comparing with baseline models d
 
 CoRT was created with GPU support from the [**KISTI National Supercomputing Center (KSC) Neuron**](https://www.ksc.re.kr/ggspcpt/neuron) free trial.
 Also, 2 NVIDIA A100 GPUs have been used for Pre-training, and 2 NVIDIA V100 GPUs have been used for Fine-tuning.
+
+### Notes
+
+I don't recommend to use KorSci-ELECTRA because of too high `[UNK]` token rate (about 85.2%).
+
+| Model             | Number of [UNK] | Total Tokens | [UNK] Rate   |
+|-------------------|-----------------|--------------|--------------|
+| klue/roberta-base | 2,734           | 9,269,131    | 0.000295     |
+| KorSci-BERT       | 14,237          | 9,077,386    | 0.001568     |
+| KorSci-ELECTRA    | 7,345,917       | 8,621,489    | **0.852047** |
 
 ### Citation
 
