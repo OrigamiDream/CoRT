@@ -203,5 +203,8 @@ If you use this code for research, please cite:
 ```
 
 ### References
+- [Khosla., "Supervised Contrastive Learning", 2020](https://arxiv.org/abs/2004.11362)
+- [Zhou., "Contrastive Out-of-Distribution Detection for Pretrained Transformers", 2021](https://arxiv.org/abs/2104.08812)
+- [Zhang., "Use All The Labels: A Hierarchical Multi-Label Contrastive Learning Framework", 2022](https://arxiv.org/abs/2204.13207)
 - [Seong., "Rhetorical Sentence Classification Using Context Information", 2021](https://koreascience.kr/article/CFKO202130060700830.pdf)
-- 
+- [Kim., "Fine-grained Named Entity Recognition using Hierarchical Label Embedding", 2021](http://www.koreascience.or.kr/article/CFKO202130060679826.pdf)
