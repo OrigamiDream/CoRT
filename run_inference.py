@@ -311,7 +311,7 @@ def main():
     parser.add_argument('--outputs_dir', default='./eval-outputs',
                         help='Location of results from model inference')
     parser.add_argument('--repr_classifier', default='seq_cls',
-                        help='Name of classifier head for classifier. (One of seq_cls and bi_lstm is allowed)')
+                        help='Name of classification head for classifier. (One of seq_cls and bi_lstm is allowed)')
     parser.add_argument('--repr_act', default='tanh',
                         help='Name of activation function for representation. (One of tanh and gelu is allowed)')
     parser.add_argument('--concat_hidden_states', default=1, type=int,
