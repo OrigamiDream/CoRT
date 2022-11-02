@@ -377,6 +377,39 @@ class CortForSequenceClassification(models.Model):
     def get_config(self):
         return super(CortForSequenceClassification, self).get_config()
 
+    class Serving(models.Model):
+
+        def __init__(self,
+                     config: ConfigLike,
+                     cort_model: "CortForSequenceClassification",
+                     calc_correlation=True, **kwargs):
+            super(CortForSequenceClassification.Serving, self).__init__(**kwargs)
+            self.config = Config.parse_config(config)
+            self.cort_model = cort_model
+            self.calc_correlation = calc_correlation
+            self.dummy_inputs = tf.zeros(
+                shape=(1, self.config.pretrained_config.max_position_embeddings), dtype=tf.int32
+            )
+
+        def call(self, inputs, training=None, mask=None):
+            _, cort_outputs = self.cort_model(inputs)
+
+            outputs = {
+                'logits': cort_outputs['logits'],
+                'probs': cort_outputs['probs']
+            }
+            if self.calc_correlation:
+                attentions = cort_outputs['attentions']
+                attention_maps = []
+                for attention in attentions:
+                    reduced = tf.reduce_mean(attention, axis=1)
+                    attention_maps.append(reduced)
+
+                reduced_attention = tf.concat(attention_maps, axis=1)
+                reduced_attention = tf.reduce_mean(reduced_attention, axis=1)
+                outputs['correlations'] = reduced_attention
+            return outputs
+
 
 class CortMainLayer(layers.Layer):
 

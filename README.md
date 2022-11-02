@@ -158,6 +158,24 @@ It has the following arguments:
 Perform inference for metrics by (for example) `python run_inference.py --checkpoint_path ./finetuning-checkpoints/wandb_run_id/ckpt-0 --tfrecord_path ./data/tfrecords/{model_name}/valid.fold-1-of-10.tfrecord --concat_hidden_states 2 --repr_act tanh --repr_classifier bi_lstm --repr_size 1024`.<br>
 `--concat_hidden_states`, `--repr_act`, `--repr_classifier`, `--repr_size` must be same with configurations that used for fine-tuned model's architecture. 
 
+### Serving
+
+CoRT supports [TensorFlow Serving](https://www.tensorflow.org/tfx/guide/serving) on Docker, use `configure_docker_image.py` to build a Docker image. 
+It has the following arguments:
+- `--checkpoint_path`: Location of trained model checkpoint. (Required)
+- `--saved_model_dir`: Location of SavedModel to be stored. ('./models' as default)
+- `--model_spec_name`: Name of model spec. ('cort' as default)
+- `--model_spec_version`: Version of model spec. ('1' as default)
+- `--signature_name`: Name of signature of SavedModel ('serving_default' as default)
+- `--model_name`: Name of pre-trained models. (One of korscibert, korscielectra, huggingface models is allowed)
+- `--tfrecord_path`: Location of TFRecord file for warmup requests. {model_name} is a placeholder.
+- `--num_warmup_requests`: Number of warmup requests. Pass 0 to skip (10 as default)
+- `--repr_classifier`: Name of classification head for classifier. (One of 'seq_cls' and 'bi_lstm' is allowed)
+- `--repr_act`: Name of activation function for representation. (One of 'tanh' and 'gelu' is allowed)
+- `--concat_hidden_states`: Number of hidden states to concatenate. (1 as default)
+- `--repr_size`: Number of representation dense units. (1024 as default)
+- `--num_labels`: Number of labels. (9 as default)
+
 ### Performance
 
 [LAN (Label Attention Network)](https://aida.kisti.re.kr/gallery/17) has been proposed in [2021 KISTI AI/ML Competition](https://aida.kisti.re.kr/notice/7).<br>

@@ -127,6 +127,7 @@ tensorflow==2.10.0
 tensorflow-addons==0.18.0
 tensorflow-estimator==2.10.0
 tensorflow-io-gcs-filesystem==0.27.0
+tensorflow-serving-api==2.10.0
 termcolor==2.0.1
 terminado==0.15.0
 threadpoolctl==3.1.0
