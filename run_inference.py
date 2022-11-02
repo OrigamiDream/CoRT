@@ -430,7 +430,7 @@ def main():
         raise ValueError(
             'Inference mode is not allowed with gRPC backend. Use `--interactive True` to enable interactive mode.'
         )
-    if not args.grpc_server and args.checkpoint_path:
+    if not args.grpc_server and not args.checkpoint_path:
         raise ValueError(
             'Path to model checkpoint is required on local inference mode.'
         )
