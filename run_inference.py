@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import grpc
 import logging
 import argparse
 import collections
@@ -22,6 +23,80 @@ console = Console()
 
 KOREAN_PATTERN = re.compile('[ㄱ-ㅎ가-힣]')
 CORRELATION_SCORE_UNICODES = ' ▁▂▃▄▅▆▇█'
+
+
+class ModelRunner:
+
+    def configure(self):
+        raise NotImplementedError('Configuring model runner is not yet available')
+
+    def call(self, input_ids, tokenizer):
+        raise NotImplementedError('Calling model runner is not yet available')
+
+
+class LocalModelRunner(ModelRunner):
+
+    def __init__(self, checkpoint_path: str, config: Config):
+        self.checkpoint_path = checkpoint_path
+        self.config = config
+        self.model = None
+
+    def configure(self):
+        self.model = CortForSequenceClassification(self.config, num_labels=self.config.num_labels)
+        self.model.trainable = False
+
+        checkpoint = tf.train.Checkpoint(model=self.model)
+        checkpoint.restore(self.checkpoint_path).expect_partial()
+        logging.info('Restored model checkpoint from {}'.format(self.checkpoint_path))
+
+    def call(self, input_ids, tokenizer):
+        _, cort_outputs = self.model(input_ids, training=False)
+        attention_maps = []
+        for attention in cort_outputs['attentions']:
+            reduced = tf.reduce_mean(attention, axis=1)
+            attention_maps.append(reduced)
+        reduced_attention = tf.concat(attention_maps, axis=1)
+        reduced_attention = tf.reduce_mean(reduced_attention, axis=1)
+        return cort_outputs['probs'].numpy(), reduced_attention.numpy()
+
+
+class ServingBackendModelRunner(ModelRunner):
+
+    def __init__(self, grpc_server: str, model_spec_name, signature_name):
+        self.server_address = (
+            grpc_server if ':' in grpc_server else grpc_server + ':8500'  # default tf-serving port
+        )
+        self.model_spec_name = model_spec_name
+        self.signature_name = signature_name
+        self.channel = None
+
+    def configure(self):
+        logging.info('Connecting to the CoRT gRPC server...')
+        self.channel = grpc.insecure_channel(self.server_address)
+        self.channel.__enter__()
+        logging.info('Successfully connected to the gRPC server: {}'.format(self.server_address))
+
+    def call(self, input_ids, tokenizer):
+        try:
+            from tensorflow_serving.apis.prediction_service_pb2_grpc import PredictionServiceStub
+            from tensorflow_serving.apis.predict_pb2 import PredictRequest
+        except ImportError as e:
+            raise ImportError('Install `tensorflow-serving-api` to use CoRT gRPC server: {}'.format(e))
+
+        input_ids = tf.make_tensor_proto(input_ids, dtype=tf.int32)
+
+        request = PredictRequest()
+        request.model_spec.name = self.model_spec_name
+        request.model_spec.signature_name = self.signature_name
+        request.inputs['input_ids'].CopyFrom(input_ids)
+
+        stub = PredictionServiceStub(self.channel)
+        response = stub.Predict(request)
+
+        probs = np.array(response.outputs['probs'].float_val).reshape((1, -1))
+        correlations = np.array(response.outputs['correlations'].float_val).reshape((1, -1))
+
+        return probs, correlations
 
 
 def parse_tfrecords(args):
@@ -82,7 +157,7 @@ def calc_correlation_from_attentions(input_ids, attentions, tokenizer):
     return correlation.numpy()
 
 
-def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
+def compose_tokens_correlations(sentence, input_ids, correlations, tokenizer):
     def build_score_unicodes(word_slice, score_index):
         unicodes = []
         for char in word_slice:
@@ -105,7 +180,9 @@ def compose_tokens_correlations(sentence, input_ids, attentions, tokenizer):
 
     length = np.sum(input_ids != tokenizer.pad_token_id)
     tokens = tokenizer.convert_ids_to_tokens(input_ids[0, 1:length - 1])  # remove [CLS], [SEP], [PAD]
-    correlations = calc_correlation_from_attentions(input_ids, attentions, tokenizer)
+
+    correlations = correlations[0, 1:length - 1]  # exclude [CLS], [SEP], [PAD]
+    correlations = (correlations - np.min(correlations)) / (np.max(correlations) - np.min(correlations))  # normalize
 
     offset = 0
     maxlen = len(sentence)
@@ -204,7 +281,7 @@ def metric_fn(dicts, cort_outputs, config):
         dicts['cce_loss'].update_state(values=d['cce_loss'])
 
 
-def perform_interactive_predictions(config, model):
+def perform_interactive_predictions(config: Config, runner: ModelRunner):
     try:
         from cort.preprocessing import run_multiprocessing_job, normalize_texts, LABEL_NAMES
     except ImportError as e:
@@ -231,11 +308,10 @@ def perform_interactive_predictions(config, model):
                               return_attention_mask=False,
                               return_token_type_ids=False)
         input_ids = np.array(tokenized['input_ids'], dtype=np.int32)
-        _, cort_outputs = model(input_ids, training=False)
+        probs, correlations = runner.call(input_ids, tokenizer)
+        composed_tokens = compose_tokens_correlations(orig, input_ids, correlations, tokenizer)
 
-        composed_tokens = compose_tokens_correlations(orig, input_ids, cort_outputs['attentions'], tokenizer)
-
-        probs = cort_outputs['probs'][0]
+        probs = probs[0]
         index = np.argmax(probs)
         print('\nCorrelations:')
         console.print(''.join([composed.colorized_correlation_unicode for composed in composed_tokens]))
@@ -302,7 +378,7 @@ def perform_inference(args, config, model):
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--checkpoint_path', required=True,
+    parser.add_argument('--checkpoint_path', default=None, type=str,
                         help='Location of trained model checkpoint.')
     parser.add_argument('--model_name', default='klue/roberta-base',
                         help='Name of pre-trained models. (One of korscibert, korscielectra, huggingface models)')
@@ -323,9 +399,16 @@ def main():
     parser.add_argument('--repr_size', default=1024, type=int,
                         help='Number of representation dense units')
     parser.add_argument('--num_labels', default=9, type=int,
-                        help='Number of labels')
+                        help='Number of labels.')
     parser.add_argument('--interactive', default=False, type=bool,
-                        help='Interactive mode for real-time inference')
+                        help='Interactive mode for real-time inference.')
+    parser.add_argument('--grpc_server', default=None, type=str,
+                        help='Address to TFServing gRPC API endpoint. '
+                             'Specify this argument when gRPC API is available.')
+    parser.add_argument('--model_spec_name', default='cort',
+                        help='Name of model spec.')
+    parser.add_argument('--signature_name', default='serving_default',
+                        help='Name of signature of SavedModel')
 
     # Configurable pre-defined variables
     parser.add_argument('--korscibert_vocab', default='./cort/pretrained/korscibert/vocab_kisti.txt')
@@ -343,18 +426,27 @@ def main():
     config = Config(**vars(args))
     config.pretrained_config = utils.parse_pretrained_config(config)
 
-    model = CortForSequenceClassification(config, num_labels=config.num_labels)
-    model.trainable = False
+    if not args.interactive and args.grpc_server:
+        raise ValueError(
+            'Inference mode is not allowed with gRPC backend. Use `--interactive True` to enable interactive mode.'
+        )
+    if not args.grpc_server and args.checkpoint_path:
+        raise ValueError(
+            'Path to model checkpoint is required on local inference mode.'
+        )
 
-    checkpoint = tf.train.Checkpoint(model=model)
-    checkpoint.restore(args.checkpoint_path).expect_partial()
-    logging.info('Restored model checkpoint from {}'.format(args.checkpoint_path))
+    if args.grpc_server:
+        runner = ServingBackendModelRunner(args.grpc_server, args.model_spec_name, args.signature_name)
+    else:
+        runner = LocalModelRunner(args.checkpoint_path, config)
+    runner.configure()
 
     if args.interactive:
         logging.info('Interactive mode enabled')
-        perform_interactive_predictions(config, model)
+        perform_interactive_predictions(config, runner)
     else:
-        perform_inference(args, config, model)
+        assert isinstance(runner, LocalModelRunner)  # make sure gRPC is not allowed for inference mode.
+        perform_inference(args, config, runner.model)
     logging.info('Finishing all jobs')
 
 

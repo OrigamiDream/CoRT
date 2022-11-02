@@ -144,7 +144,7 @@ It has the following arguments:
 
 Use `run_inference.py` to perform inference on fine-tuned models.
 It has the following arguments:
-- `--checkpoint_path`: Location of trained model checkpoint. (Required)
+- `--checkpoint_path`: Location of trained model checkpoint. (Required when gRPC server is not provided)
 - `--model_name`: Name of pre-trained models. (One of korscibert, korscielectra, huggingface models is allowed)
 - `--tfrecord_path`: Location of TFRecord file for inference. {model_name} is a placeholder.
 - `--repr_classifier`: Name of classification head for classifier. (One of 'seq_cls' and 'bi_lstm' is allowed)
@@ -154,6 +154,9 @@ It has the following arguments:
 - `--max_position_embeddings`: Number of maximum position embeddings. (512 as default)
 - `--repr_size`: Number of representation dense units. (1024 as default)
 - `--num_labels`: Number of labels. (9 as default)
+- `--grpc_server`: Address to TFServing gRPC API endpoint. Specify this argument when gRPC API is available. (`None` as default)
+- `--model_spec_name`: Name of model spec. ('cort' as default)
+- `--signature_name`: Name of signature of SavedModel ('serving_default' as default)
 
 Perform inference for metrics by (for example) `python run_inference.py --checkpoint_path ./finetuning-checkpoints/wandb_run_id/ckpt-0 --tfrecord_path ./data/tfrecords/{model_name}/valid.fold-1-of-10.tfrecord --concat_hidden_states 2 --repr_act tanh --repr_classifier bi_lstm --repr_size 1024`.<br>
 `--concat_hidden_states`, `--repr_act`, `--repr_classifier`, `--repr_size` must be same with configurations that used for fine-tuned model's architecture. 
