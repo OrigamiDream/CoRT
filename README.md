@@ -160,7 +160,7 @@ Perform inference for metrics by (for example) `python run_inference.py --checkp
 
 ### Serving
 
-CoRT supports [TensorFlow Serving](https://www.tensorflow.org/tfx/guide/serving) on Docker, use `configure_docker_image.py` to build a Docker image. 
+CoRT supports [TensorFlow Serving](https://www.tensorflow.org/tfx/guide/serving) on Docker, use `configure_docker_image.py` to prepare components for Docker container. 
 It has the following arguments:
 - `--checkpoint_path`: Location of trained model checkpoint. (Required)
 - `--saved_model_dir`: Location of SavedModel to be stored. ('./models' as default)
@@ -175,6 +175,12 @@ It has the following arguments:
 - `--concat_hidden_states`: Number of hidden states to concatenate. (1 as default)
 - `--repr_size`: Number of representation dense units. (1024 as default)
 - `--num_labels`: Number of labels. (9 as default)
+
+Once configuring is done. Run following commands to build and run Docker container.
+```
+MODEL_DIR=./models MODEL_NAME=cort MODEL_VERSION=1 docker build -t cort/serving:latest .
+docker run -d -p 8500:8500 --name cort-grpc-server cort/serving
+```
 
 ### Performance
 
