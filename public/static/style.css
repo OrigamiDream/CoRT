@@ -5,6 +5,7 @@
 .card-query-row {
     position: relative;
     height: 40px;
+    transition: height 0.5s ease-out;
 }
 
 .card-query-wrap {
