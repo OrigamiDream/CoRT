@@ -215,18 +215,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            // no way to force chart size explicitly.
-            for(let i = 1; i <= 4; i++) {
-                setTimeout(() => {
-                    const width = elements.span.offsetWidth;
-                    chart.resize(width, 50);
-                    chart.update();
+            function update() {
+                const width = elements.span.offsetWidth;
+                chart.resize(width, 50);
+                chart.update();
 
-                    canvas.setAttribute('width', `${width}px`);
-                    canvas.setAttribute('height', '50px');
-                    canvas.style.width = `${width}px`;
-                    canvas.style.height = '50px';
-                }, 100 * i);
+                canvas.setAttribute('width', `${width}px`);
+                canvas.setAttribute('height', '50px');
+                canvas.style.width = `${width}px`;
+                canvas.style.height = '50px';
+            }
+
+            // no way to force chart size explicitly.
+            setTimeout(() => {
+                update();
+            }, 100);
+            for(let i = 1; i <= 3; i++) {
+                setTimeout(() => {
+                    update();
+                }, 1000 * i);
             }
         }).catch((error) => {
             console.error(error);
