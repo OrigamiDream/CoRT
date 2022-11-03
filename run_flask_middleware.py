@@ -50,7 +50,7 @@ def compose_correlation_to_tokens(correlations, tokens, sentence):
     return composed_tokens
 
 
-def preprocess_inputs(sentence, tokenizer, channel, args):
+def request_prediction(sentence, tokenizer, channel, args):
     orig = sentence
     # normalize texts
     sentence = normalize_texts(sentence)
@@ -93,7 +93,7 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--host', default='0.0.0.0',
                         help='Listening address for Flask server')
-    parser.add_argument('--port', default=80,
+    parser.add_argument('--port', default=8080,
                         help='Number of port for Flask server')
     parser.add_argument('--grpc_server', default='localhost:8500',
                         help='Address to TFServing gRPC API endpoint.')
@@ -128,7 +128,7 @@ def main():
     def predict():
         body = request.get_json()
         try:
-            prediction, composed_tokens = preprocess_inputs(body['sentence'], tokenizer, channel, args)
+            prediction, composed_tokens = request_prediction(body['sentence'], tokenizer, channel, args)
         except grpc.RpcError as e:
             logging.error(e)
             return jsonify({

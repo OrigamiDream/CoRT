@@ -188,15 +188,15 @@ docker run -d -p 8500:8500 --name cort-grpc-server cort/serving
 
 Intermediate API middleware is written in Flask. Use `run_flask_middleware.py` to open a HTTP server that communicates with gRPC backend directly. It has the following arguments:
 - `--host`: Listening address for Flask server ('0.0.0.0' as default)
-- `--port`: Number of port for Flask server (80 as default)
+- `--port`: Number of port for Flask server (8080 as default)
 - `--grpc_server`: Address to TFServing gRPC API endpoint. ('localhost:8500' as default)
 - `--model_name`: Name of pre-trained models. (One of korscibert, korscielectra, huggingface models is allowed)
 - `--model_spec_name`: Name of model spec. ('cort' as default)
 - `--signature_name`: Name of signature of SavedModel ('serving_default' as default)
 
-Use `POST http://127.0.0.1/predict` to request prediction over HTTP protocol.
+Use `POST http://127.0.0.1:8080/predict` to request prediction over HTTP protocol.
 ```http request
-POST http://127.0.0.1/predict
+POST http://127.0.0.1:8080/predict
 Content-Type: application/json
 
 {"sentence": "<sentence>"}
