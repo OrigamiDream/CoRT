@@ -113,10 +113,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 'Content-Type': 'application/json'
             }
         }).then((response) => {
-            console.log(response);
             return response.json()
         }).then((res) => {
-            console.log(res);
             const error = res['error'];
             if(error) {
                 throw error;
@@ -212,6 +210,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         y: {
                             display: false
                         }
+                    },
+                    animation: {
+                        onComplete: function() {
+                            const sourceCanvas = chart.ctx.canvas;
+                            const destination = document.createElement('canvas');
+
+                            destination.style.width = `${elements.span.offsetWidth}px`;
+                            destination.style.height = '50px';
+                            destination.style.display = 'block';
+                            destination.style.boxSizing = 'border-box';
+
+                            const destinationContext = destination.getContext('2d');
+                            destinationContext.canvas.width = elements.span.offsetWidth * 2;
+                            destinationContext.canvas.height = 100;
+                            destinationContext.drawImage(sourceCanvas, 0, 0);
+
+                            canvas.remove();
+                            chartWrap.prepend(destination);
+                        }
                     }
                 }
             });
@@ -220,8 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 chart.resize(width, 50);
                 chart.update();
 
-                canvas.setAttribute('width', `${width}px`);
-                canvas.setAttribute('height', '50px');
                 canvas.style.width = `${width}px`;
                 canvas.style.height = '50px';
             }
@@ -230,11 +245,9 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 update();
             }, 100);
-            for(let i = 1; i <= 3; i++) {
-                setTimeout(() => {
-                    update();
-                }, 1000 * i);
-            }
+            setTimeout(() => {
+                update();
+            }, 500);
         }).catch((error) => {
             console.error(error);
         });
