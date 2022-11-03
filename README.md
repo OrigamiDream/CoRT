@@ -202,6 +202,8 @@ Content-Type: application/json
 {"sentence": "<sentence>"}
 ```
 
+For people who is unfamiliar with this, the middleware is also providing static website. Visit `http://127.0.0.1:8080/site` to try out easily.
+
 ### Performance
 
 [LAN (Label Attention Network)](https://aida.kisti.re.kr/gallery/17) has been proposed in [2021 KISTI AI/ML Competition](https://aida.kisti.re.kr/notice/7).<br>
