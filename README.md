@@ -6,6 +6,10 @@
 The model is built for AI/ML modeling competition hosting from [KISTI](https://www.kisti.re.kr) (Korea Institute of Science and Technology Information).
 The main problem of this model is classifying sentences from research papers written in Korean that had been tagged based on rhetorical meaning.
 
+<p align="center">
+  <img alt="website" src="https://user-images.githubusercontent.com/5837620/199668919-8a486b94-17ed-4563-95c1-95171cd0c6be.png" width="738px">
+</p>
+
 ### Problem Solving
 
 The problem have following hierarchical categories.
