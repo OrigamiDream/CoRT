@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 from utils import utils
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect, render_template
 from cort.preprocessing import normalize_texts
 from tensorflow_serving.apis.prediction_service_pb2_grpc import PredictionServiceStub
 from tensorflow_serving.apis.predict_pb2 import PredictRequest
@@ -103,6 +103,8 @@ def main():
                         help='Name of model spec.')
     parser.add_argument('--signature_name', default='serving_default',
                         help='Name of signature of SavedModel')
+    parser.add_argument('--debug', default=False,
+                        help='Debug mode')
 
     # Configurable pre-defined variables
     parser.add_argument('--korscibert_vocab', default='./cort/pretrained/korscibert/vocab_kisti.txt')
@@ -116,13 +118,24 @@ def main():
         tokenizer.disable_progressbar = True
 
     channel = grpc.insecure_channel(args.grpc_server)
-    app = Flask(__name__)
+    app = Flask(__name__,
+                static_url_path='/static',
+                static_folder='./public/static',
+                template_folder='./public/template')
+
+    @app.errorhandler(404)
+    def handle_not_found(_):
+        return redirect('/site')
 
     @app.errorhandler(Exception)
     def handle_exception(e):
         return jsonify({
             'error': str(e)
         })
+
+    @app.route('/site', methods=['GET'])
+    def site():
+        return render_template('index.html')
 
     @app.route('/predict', methods=['POST'])
     def predict():
@@ -141,7 +154,7 @@ def main():
                 'composed_tokens': composed_tokens
             })
 
-    app.run(host=args.host, port=args.port)
+    app.run(host=args.host, port=args.port, debug=args.debug)
 
 
 if __name__ == '__main__':

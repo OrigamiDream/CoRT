@@ -1,0 +1,46 @@
+.pred-shown {
+    height: 90px !important;
+}
+
+.card-query-row {
+    position: relative;
+    height: 40px;
+}
+
+.card-query-wrap {
+    display: inline-block;
+    height: 100%;
+    width: calc(100% - 125px);
+}
+
+.card-query-body {
+    display: inline-block;
+    overflow-x: scroll;
+    -ms-overflow-style: none;
+    max-width: 100%;
+    height: 100%;
+    line-height: 40px;
+    vertical-align: middle;
+}
+
+.card-query-body::-webkit-scrollbar {
+    display: none;
+}
+
+.card-query-body span {
+    white-space: nowrap;
+    line-height: 40px;
+}
+
+.card-tag {
+    display: inline-block;
+    width: 120px;
+    height: 40px;
+    text-align: right;
+}
+
+.card-tag .btn {
+    width: 110px;
+    height: 40px;
+    cursor: default;
+}
