@@ -228,6 +228,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             canvas.remove();
                             chartWrap.prepend(destination);
+
+                            chart.destroy()
                         }
                     }
                 }
