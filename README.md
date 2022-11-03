@@ -180,7 +180,7 @@ It has the following arguments:
 - `--repr_size`: Number of representation dense units. (1024 as default)
 - `--num_labels`: Number of labels. (9 as default)
 
-Once configuring is done. Run following commands to build and run Docker container.
+Once configuring is done, run following commands to build and run Docker container.
 ```
 docker build -t cort/serving:latest .
 docker run -d -p 8500:8500 --name cort-grpc-server cort/serving
