@@ -69,11 +69,11 @@ Install following main packages by manually, or use `requirements.txt`
 - torch
 - transformers
 - scikit-learn
-- wandb  # MLOps service
 - pandas
-- konlpy  # For Mecab
-- soynlp  # For text normalization
-- rich  # For text highlighting
+- wandb  # for parameter tracking
+- konlpy  # for mecab
+- soynlp  # for text normalization
+- rich  # for text highlighting
 - flask  # for middleware api
 ```
 ```bash
