@@ -251,6 +251,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 update();
             }, 500);
         }).catch((error) => {
+            const failure = document.createElement('i');
+            failure.classList.add('bi', 'bi-exclamation-triangle');
+
+            const button = document.createElement('div');
+            button.classList.add('btn', 'btn-outline-danger');
+            button.append(failure);
+
+            elements.spinnerButton.remove();
+            elements.tag.append(button);
+
             console.error(error);
         });
     }
