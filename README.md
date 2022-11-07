@@ -218,7 +218,7 @@ For people who is unfamiliar with this, the middleware is also providing static 
 | Sentence Concat (KLUE BERT base) | 70.85          | 88.77     |
 | Encoder Concat (KLUE BERT base)  | 71.91          | 88.59     |
 | LAN (KorSci-BERT)                | 89.95          | 89.76     |
-| LAN (KLUE RoBERTA base)          | 89.77          | 89.85     |
+| LAN (KLUE RoBERTA base)          | 90.00          | 89.85     |
 | **CoRT (KLUE RoBERTA base)**     | **90.50**      | 90.17     |
 | **CoRT (KorSci-BERT)**           | 90.42          | **90.25** |
 
