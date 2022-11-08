@@ -82,7 +82,8 @@ def main():
     utils.restrict_gpus(config)
 
     # Initialize W&B agent
-    run_name = 'PT-{}_L-{}_I-{}'.format(config.model_name, config.loss_base, utils.generate_random_id())
+    random_id = utils.generate_random_id()
+    run_name = 'PT-{}_L-{}_I-{}'.format(config.model_name, config.loss_base, random_id)
     wandb.init(project='CoRT Pre-training', name=run_name)
 
     # Restricting random seed after setting W&B agents
@@ -101,7 +102,8 @@ def main():
         metric = metrics.Mean(name='loss')
         val_metric = metrics.Mean(name='val_loss')
 
-        checkpoint_dir = os.path.join('./pretraining-checkpoints', wandb.run.id)
+        checkpoint_id = wandb.run.id if wandb.run.id is not None else random_id
+        checkpoint_dir = os.path.join('./pretraining-checkpoints', checkpoint_id)
         checkpoint = tf.train.Checkpoint(step=tf.Variable(0), optimizer=optimizer, model=model)
         manager = tf.train.CheckpointManager(checkpoint, checkpoint_dir, max_to_keep=config.keep_checkpoint_max)
         if config.restore_checkpoint and config.restore_checkpoint != 'latest':

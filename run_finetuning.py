@@ -123,6 +123,7 @@ def main():
     utils.restrict_gpus(config)
 
     # Initialize W&B agent
+    random_id = utils.generate_random_id()
     if not config.train_at_once and not config.pretraining_run_name:
         raise ValueError('Pre-training run name must be provided when uses Pre-trained models')
     elif not config.train_at_once and not config.pretraining_checkpoint_dir:
@@ -168,7 +169,8 @@ def main():
                 model.cort.trainable = False
                 logging.info('Froze CoRT encoder layers')
 
-        checkpoint_dir = os.path.join('./finetuning-checkpoints', wandb.run.id)
+        checkpoint_id = wandb.run.id if wandb.run.id is not None else random_id
+        checkpoint_dir = os.path.join('./finetuning-checkpoints', checkpoint_id)
         checkpoint = tf.train.Checkpoint(model=model)
         manager = tf.train.CheckpointManager(checkpoint, checkpoint_dir, max_to_keep=config.keep_checkpoint_max)
         if config.restore_checkpoint and config.restore_checkpoint == 'latest' and not config.pretraining_run_name:
