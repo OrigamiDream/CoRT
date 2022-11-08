@@ -1,4 +1,4 @@
-FROM tensorflow/serving:2.8.2
+FROM tensorflow/serving:2.8.2-gpu
 
 ENV MODEL_DIR ./models
 ENV MODEL_NAME cort

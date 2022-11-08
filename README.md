@@ -181,6 +181,7 @@ It has the following arguments:
 - `--max_position_embeddings`: Number of maximum position embeddings. (512 as default)
 - `--repr_size`: Number of representation dense units. (1024 as default)
 - `--num_labels`: Number of labels. (9 as default)
+- `--interactive`: Interactive mode for real-time inference. (`False` as default)
 - `--grpc_server`: Address to TFServing gRPC API endpoint. Specify this argument when gRPC API is available. (`None` as default)
 - `--model_spec_name`: Name of model spec. ('cort' as default)
 - `--signature_name`: Name of signature of SavedModel ('serving_default' as default)
@@ -208,7 +209,7 @@ It has the following arguments:
 
 Once configuring is done, run following commands to build and run Docker container.
 ```
-docker build -t cort/serving:latest .
+nvidia-docker build -t cort/serving:latest .
 docker run -d -p 8500:8500 --name cort-grpc-server cort/serving
 ```
 
