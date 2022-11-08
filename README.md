@@ -159,6 +159,7 @@ It has the following arguments:
 - `--pretraining_run_name`: W&B Run ID in `pretraining-checkpoints`. The pre-trained checkpoint model must be same with `--model_name` model.
 - `--epochs`: Number of training epochs. (10 as default)
 - `--repr_act`: Activation function name to be used after classifier dense layer. ('tanh' as default. 'none', and other name of activations supported from TensorFlow is available)
+- `--concat_hidden_states`: Number of hidden states to concatenate. (1 as default)
 - `--loss_base`: Name of loss function for contrastive learning. ('margin' as default. 'margin', 'supervised' and 'hierarchical' is available)
 - `--restore_checkpoint`: Name of checkpoint file. (`None` as default. I recommend 'latest' when fine-tune)
 - `--repr_classifier`: Type of classification head. ('seq_cls' as default. 'seq_cls' and 'bi_lstm' is available)
