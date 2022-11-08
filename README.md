@@ -12,6 +12,10 @@ The main problem of this model is classifying sentences from research papers wri
 
 ### Table of Contents
 - [Problem Serving](#problem-solving)
+- [Paper Reviews](#paper-reviews)
+  - [Supervised Contrastive Learning](#supervised-contrastive-learning)
+  - [Margin-based Contrastive Learning](#margin-based-contrastive-learning)
+  - [Hierarchical Contrastive Learning](#hierarchical-contrastive-learning)
 - [Prerequisites](#prerequisites)
 - [Command Line Interface](#command-line-interface)
   - [Pre-training](#pre-training)
@@ -46,7 +50,9 @@ You can use following Pre-trained models: **KorSci-BERT**, **KorSci-ELECTRA**, a
 
 I have used `klue/roberta-base` for additional pre-trained model.
 
-##### Supervised Contrastive Learning (The best in my case)
+### Paper Reviews
+
+#### Supervised Contrastive Learning
 
 [[arXiv]](https://arxiv.org/abs/2004.11362) - Supervised Contrastive Learning
 
@@ -59,7 +65,7 @@ I've used contrastive loss from the paper, and Pre-training and Fine-tuning sepa
 
 This gave me significant improvement on performance and speed of converge.
 
-##### Margin-based Contrastive Learning
+#### Margin-based Contrastive Learning
 
 [[arXiv]](https://arxiv.org/abs/2104.08812) - Contrastive Out-of-Distribution Detection for Pretrained Transformers
 
@@ -67,7 +73,7 @@ Contrastive Representation Learning is powerful enough, but pushing all of label
 Maximizing margin between representations is very helpful on clarifying decision boundaries between representations.<br>
 Although the paper suggest this for out-of-distribution problem, but experimenting clarifying decision boundaries in other tasks is reasonable.
 
-##### Hierarchical Contrastive Learning
+#### Hierarchical Contrastive Learning
 
 [[arXiv]](https://arxiv.org/abs/2204.13207) - Use All The Labels: A Hierarchical Multi-Label Contrastive Learning Framework
 
