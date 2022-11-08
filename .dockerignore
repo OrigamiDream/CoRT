@@ -1,0 +1,9 @@
+./cort/pretrained/korscibert
+!./cort/pretrained/korscibert/tokenization_kisti.py
+!./cort/pretrained/korscibert/vocab_kisti.txt
+
+./cort/pretrained/korscielectra
+!./cort/pretrained/korscielectra/data/vocab.txt
+!./cort/pretrained/korscielectra/model/tokenization.py
+
+*.md

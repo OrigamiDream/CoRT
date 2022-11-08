@@ -209,8 +209,8 @@ It has the following arguments:
 - `--num_labels`: Number of labels. (9 as default)
 
 Once configuring is done, run following commands to build and run Docker container.
-```
-nvidia-docker build -t cort/serving:latest .
+```bash
+nvidia-docker build -t cort/serving:latest -f ./docker/serving/Dockerfile .
 docker run -d -p 8500:8500 --name cort-grpc-server cort/serving
 ```
 
@@ -228,6 +228,19 @@ POST http://127.0.0.1:8080/predict
 Content-Type: application/json
 
 {"sentence": "<sentence>"}
+```
+
+Flask server also can be run on Docker container.
+```bash
+docker build -t cort/flask:latest -f ./docker/middleware/Dockerfile .
+docker run -d -p 8080:8080 --name cort-flask-server cort/flask
+```
+
+To make those Docker containers communicate each other, create network and connect them via following commands.
+```bash
+docker network create cort
+docker run -d -p 8500:8500 --name cort-grpc-server --network cort cort/serving
+docker run -d -p 8080:8080 --name cort-flask-server --network cort --env GRPC_SERVER=cort-grpc-server:8500 cort/flask
 ```
 
 For people who is unfamiliar with this, the middleware is also providing static website. Visit `http://127.0.0.1:8080/site` to try out easily.
