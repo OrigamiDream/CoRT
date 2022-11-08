@@ -10,6 +10,20 @@ The main problem of this model is classifying sentences from research papers wri
   <img alt="website" src="https://user-images.githubusercontent.com/5837620/199670251-7e335798-0ad4-407b-aaf2-7ed3d9b867cd.png" width="738px">
 </p>
 
+### Table of Contents
+- [Problem Serving](#problem-solving)
+- [Prerequisites](#prerequisites)
+- [Command Line Interface](#command-line-interface)
+  - [Pre-training](#pre-training)
+  - [Fine-tuning](#fine-tuning)
+  - [Inference](#inference)
+  - [Serving](#serving)
+- [Performance](#performance)
+- [Acknowledgement](#acknowledgement)
+- [Notes](#notes)
+- [Citation](#citation)
+- [References](#references)
+
 ### Problem Solving
 
 The problem have following hierarchical categories.
@@ -83,6 +97,8 @@ Install following main packages by manually, or use `requirements.txt`
 ```bash
 pip install -r requirements.txt
 ```
+
+## Command Line Interface
 
 ### Pre-training
 
