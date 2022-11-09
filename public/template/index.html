@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>CoRT: Contrastive Rhetorical Tagging</title>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-Zenh87qX5JnK2Jl0vWa8Ck2rdkQ2Bzep5IDxbcnCeuOxjzrPF/et3URy9Bv1WTRi" crossorigin="anonymous">
@@ -12,11 +13,13 @@
 <body>
 <div class="container">
     <div class="mt-5 text-center">
-        <h1>CoRT: Co<span class="text-muted">ntrastive</span> R<span class="text-muted">hetorical</span> T<span class="text-muted">agging</span></h1>
+        <h1 class="main-title">CoRT: Co<span class="text-muted">ntrastive</span> R<span class="text-muted">hetorical</span> T<span class="text-muted">agging</span></h1>
     </div>
     <div class="mt-5 input-group input-group-lg">
         <input id="sentence" type="text" class="form-control" aria-label="Query" placeholder="문장을 입력하세요." style="height: 56px">
-        <button id="submit" type="button" class="btn btn-primary">→</button>
+        <button id="submit" type="button" class="btn btn-primary">
+            <i class="bi bi-arrow-right"></i>
+        </button>
     </div>
     <div class="mt-5 d-grid gap-3" id="predictions"></div>
 </div>
