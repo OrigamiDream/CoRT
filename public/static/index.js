@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
         card.classList.add('card');
 
         const cardBody = document.createElement('div');
-        card.classList.add('card-body');
+        cardBody.classList.add('card-body');
 
         const row = document.createElement('div');
         row.classList.add('card-query-row');
@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row: row,
             tag: cardTag,
             body: queryBody,
+            wrap: queryWrap,
             span: span,
             spinnerButton: spinnerButton
         }
@@ -95,6 +96,212 @@ document.addEventListener('DOMContentLoaded', () => {
         return ma;
     }
 
+    function createAttentionChart(elements, composedTokens) {
+        const chartWrap = document.createElement('div');
+        chartWrap.classList.add('card-pred-chart');
+
+        const canvas = document.createElement('canvas');
+        canvas.setAttribute('width', '0');
+        canvas.setAttribute('height', '50');
+        canvas.style.width = '0px';
+        canvas.style.height = '50px';
+
+        chartWrap.append(canvas);
+        elements.body.prepend(chartWrap);
+        elements.row.classList.add('pred-shown');
+
+        const tokens = [];
+        const scores = [];
+        for(const token of composedTokens) {
+            tokens.push(token.text);
+            scores.push(token.score);
+        }
+        const tokenWidths = calculateTokenWidths(tokens);
+        let digitalized = [];
+        for(let i = 0; i < tokenWidths.length; i++) {
+            const width = tokenWidths[i];
+            const score = scores[i] + 0.05;  // bottom padding
+            const repeats = (width / 1) | 0;  // double to int
+            for(let j = 0; j < repeats; j++) {
+                digitalized.push(score);
+            }
+        }
+        for(let i = 0; i < 3; i++) {
+            digitalized = calculatePairedMovingAverage(digitalized);
+        }
+        const labels = [];
+        for(let i = 0; i < digitalized.length; i++) {
+            labels.push(`i${i}`);
+        }
+
+        const context = canvas.getContext('2d');
+        const gradient = context.createLinearGradient(0, 0, 0, 50);
+        gradient.addColorStop(0, '#629cff');
+        gradient.addColorStop(1, '#ffffff');
+
+        const chart = new Chart(context, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: digitalized,
+                    backgroundColor: gradient,
+                    borderColor: '#629cff',
+                    fill: true
+                }]
+            },
+            options: {
+                response: true,
+                maintainAspectRatio: false,
+                events: [],
+                plugins: {
+                    title: {
+                        display: false
+                    },
+                    legend: {
+                        display: false
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 0
+                    }
+                },
+                scales: {
+                    x: {
+                        display: false
+                    },
+                    y: {
+                        display: false
+                    }
+                },
+                animation: {
+                    onComplete: function() {
+                        const sourceCanvas = chart.ctx.canvas;
+                        const destination = document.createElement('canvas');
+
+                        destination.style.width = `${elements.span.offsetWidth}px`;
+                        destination.style.height = '50px';
+                        destination.style.display = 'block';
+                        destination.style.boxSizing = 'border-box';
+
+                        const destinationContext = destination.getContext('2d');
+                        const newWidth = elements.span.offsetWidth * 2;
+                        const newHeight = 100;
+                        destinationContext.canvas.width = newWidth;
+                        destinationContext.canvas.height = newHeight;
+                        destinationContext.drawImage(sourceCanvas, 0, 0, newWidth, newHeight);
+
+                        canvas.remove();
+                        chartWrap.prepend(destination);
+
+                        chart.destroy()
+                    }
+                }
+            }
+        });
+        function update() {
+            const width = elements.span.offsetWidth;
+            chart.resize(width, 50);
+            chart.update();
+
+            canvas.style.width = `${width}px`;
+            canvas.style.height = '50px';
+        }
+
+        // no way to force chart size explicitly.
+        setTimeout(() => {
+            update();
+        }, 100);
+        setTimeout(() => {
+            update();
+        }, 500);
+    }
+
+    function createPredictionButton(elements, predicted, predicted_prob) {
+        const tag = elements.tag;
+        const resultButton = document.createElement('button');
+        resultButton.type = 'button';
+        resultButton.classList.add('btn', 'btn-outline-primary');
+        resultButton.innerText = labelNames[predicted];
+        resultButton.setAttribute('data-toggle', 'tooltip');
+        resultButton.setAttribute('data-placement', 'top');
+        resultButton.setAttribute('title', `Confidence: ${predicted_prob.toFixed(4)}`);
+        tag.append(resultButton);
+
+        new bootstrap.Tooltip(resultButton);
+
+        resultButton.addEventListener('mouseenter', () => {
+            elements.wrap.classList.add('probs-shown');
+        });
+        resultButton.addEventListener('mouseout', () => {
+            elements.wrap.classList.remove('probs-shown');
+        });
+    }
+
+    function createConfidenceChart(elements, probs) {
+        const probWrap = document.createElement('div');
+        probWrap.classList.add('card-query-prob');
+        elements.wrap.append(probWrap);
+
+        const canvas = document.createElement('canvas');
+        probWrap.append(canvas);
+
+        const context = canvas.getContext('2d');
+        const gradient = context.createLinearGradient(0, 0, 0, 60);
+        gradient.addColorStop(0, '#629cff');
+        gradient.addColorStop(1, '#ffffff');
+        new Chart(context, {
+            type: 'bar',
+            plugins: [ChartDataLabels],
+            data: {
+                labels: labelNames,
+                datasets: [{
+                    label: 'Confidence',
+                    data: probs,
+                    backgroundColor: gradient,
+                    borderColor: '#629cff',
+                    borderRadius: 5,
+                    borderWidth: 3,
+                    fill: true
+                }]
+            },
+            options: {
+                response: true,
+                maintainAspectRatio: false,
+                events: [],
+                plugins: {
+                    title: {
+                        display: false
+                    },
+                    legend: {
+                        display: false
+                    },
+                    datalabels: {
+                        align: 'end',
+                        color: 'rgb(33, 37, 41)',
+                        offset: 3,
+                        padding: 0,
+                        formatter: (value) => {
+                            return value.toFixed(4);
+                        },
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        min: 0.0,
+                        max: 1.0
+                    }
+                }
+            }
+        });
+    }
+
     function predict() {
         const value = sentence.value;
         if(!value) {
@@ -121,137 +328,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const predicted = res['prediction'];
+            const predicted_prob = res['prediction_prob'];
+            const probs = res['probs'];
             const composedTokens = res['composed_tokens'];
 
             elements.spinnerButton.remove();
             elements.spinnerButton = null;
 
-            const tag = elements.tag;
-            const resultButton = document.createElement('button');
-            resultButton.type = 'button';
-            resultButton.classList.add('btn', 'btn-outline-primary');
-            resultButton.innerText = labelNames[predicted];
-            tag.append(resultButton);
-
-            const chartWrap = document.createElement('div');
-            chartWrap.classList.add('card-pred-chart');
-
-            const canvas = document.createElement('canvas');
-            canvas.setAttribute('width', '0');
-            canvas.setAttribute('height', '50');
-            canvas.style.width = '0px';
-            canvas.style.height = '50px';
-
-            chartWrap.append(canvas);
-            elements.body.prepend(chartWrap);
-            elements.row.classList.add('pred-shown');
-
-            const tokens = [];
-            const scores = [];
-            for(const token of composedTokens) {
-                tokens.push(token.text);
-                scores.push(token.score);
-            }
-            const tokenWidths = calculateTokenWidths(tokens);
-            let digitalized = [];
-            for(let i = 0; i < tokenWidths.length; i++) {
-                const width = tokenWidths[i];
-                const score = scores[i] + 0.05;  // bottom padding
-                const repeats = (width / 1) | 0;  // double to int
-                for(let j = 0; j < repeats; j++) {
-                    digitalized.push(score);
-                }
-            }
-            for(let i = 0; i < 3; i++) {
-                digitalized = calculatePairedMovingAverage(digitalized);
-            }
-            const labels = [];
-            for(let i = 0; i < digitalized.length; i++) {
-                labels.push(`i${i}`);
-            }
-
-            const context = canvas.getContext('2d');
-            const gradient = context.createLinearGradient(0, 0, 0, 50);
-            gradient.addColorStop(0, '#629cff');
-            gradient.addColorStop(1, '#ffffff');
-
-            const chart = new Chart(context, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: digitalized,
-                        backgroundColor: gradient,
-                        borderColor: '#629cff',
-                        fill: true
-                    }]
-                },
-                options: {
-                    response: true,
-                    maintainAspectRatio: false,
-                    events: [],
-                    plugins: {
-                        title: {
-                            display: false
-                        },
-                        legend: {
-                            display: false
-                        }
-                    },
-                    elements: {
-                        point: {
-                            radius: 0
-                        }
-                    },
-                    scales: {
-                        x: {
-                            display: false
-                        },
-                        y: {
-                            display: false
-                        }
-                    },
-                    animation: {
-                        onComplete: function() {
-                            const sourceCanvas = chart.ctx.canvas;
-                            const destination = document.createElement('canvas');
-
-                            destination.style.width = `${elements.span.offsetWidth}px`;
-                            destination.style.height = '50px';
-                            destination.style.display = 'block';
-                            destination.style.boxSizing = 'border-box';
-
-                            const destinationContext = destination.getContext('2d');
-                            const newWidth = elements.span.offsetWidth * 2;
-                            const newHeight = 100;
-                            destinationContext.canvas.width = newWidth;
-                            destinationContext.canvas.height = newHeight;
-                            destinationContext.drawImage(sourceCanvas, 0, 0, newWidth, newHeight);
-
-                            canvas.remove();
-                            chartWrap.prepend(destination);
-
-                            chart.destroy()
-                        }
-                    }
-                }
-            });
-            function update() {
-                const width = elements.span.offsetWidth;
-                chart.resize(width, 50);
-                chart.update();
-
-                canvas.style.width = `${width}px`;
-                canvas.style.height = '50px';
-            }
-
-            // no way to force chart size explicitly.
-            setTimeout(() => {
-                update();
-            }, 100);
-            setTimeout(() => {
-                update();
-            }, 500);
+            createPredictionButton(elements, predicted, predicted_prob);
+            createAttentionChart(elements, composedTokens);
+            createConfidenceChart(elements, probs);
         }).catch((error) => {
             const failure = document.createElement('i');
             failure.classList.add('bi', 'bi-exclamation-triangle');

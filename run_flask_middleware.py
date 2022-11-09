@@ -86,7 +86,14 @@ def request_prediction(sentence, tokenizer, channel, args):
     # compose correlation vector to tokens for graphs
     composed_tokens = compose_correlation_to_tokens(correlations, tokens, orig)
     prediction = int(np.argmax(probs[0]))
-    return prediction, composed_tokens
+    prediction_prob = float(probs[0][prediction])
+    probs = [float(prob) for prob in probs[0]]
+    return {
+        'prediction': prediction,
+        'prediction_prob': prediction_prob,
+        'probs': probs,
+        'composed_tokens': composed_tokens
+    }
 
 
 def main():
@@ -141,7 +148,7 @@ def main():
     def predict():
         body = request.get_json()
         try:
-            prediction, composed_tokens = request_prediction(body['sentence'], tokenizer, channel, args)
+            outputs = request_prediction(body['sentence'], tokenizer, channel, args)
         except grpc.RpcError as e:
             logging.error(e)
             return jsonify({
@@ -150,8 +157,10 @@ def main():
         else:
             return jsonify({
                 'error': None,
-                'prediction': prediction,
-                'composed_tokens': composed_tokens
+                'prediction': outputs['prediction'],
+                'prediction_prob': outputs['prediction_prob'],
+                'probs': outputs['probs'],
+                'composed_tokens': outputs['composed_tokens']
             })
 
     app.run(host=args.host, port=args.port, debug=args.debug)

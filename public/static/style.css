@@ -8,16 +8,24 @@
     height: 90px !important;
 }
 
+.probs-shown {
+    transform: translateY(-100%);
+}
+
 .card-query-row {
     position: relative;
+    overflow: hidden;
     height: 40px;
     transition: height 0.5s ease-out;
 }
 
 .card-query-wrap {
     display: inline-block;
+    position: absolute;
+    left: 0;
     height: 100%;
     width: calc(100% - 125px);
+    transition: transform 0.5s ease-out;
 }
 
 .card-query-body {
@@ -28,6 +36,11 @@
     height: 100%;
     line-height: 40px;
     vertical-align: middle;
+}
+
+.card-query-prob {
+    width: 100%;
+    height: 90px;
 }
 
 .card-query-body::-webkit-scrollbar {
@@ -41,6 +54,10 @@
 
 .card-tag {
     display: inline-block;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
     width: 120px;
     height: 40px;
     text-align: right;
