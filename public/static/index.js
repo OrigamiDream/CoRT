@@ -222,9 +222,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             destination.style.boxSizing = 'border-box';
 
                             const destinationContext = destination.getContext('2d');
-                            destinationContext.canvas.width = elements.span.offsetWidth * 2;
-                            destinationContext.canvas.height = 100;
-                            destinationContext.drawImage(sourceCanvas, 0, 0);
+                            const newWidth = elements.span.offsetWidth * 2;
+                            const newHeight = 100;
+                            destinationContext.canvas.width = newWidth;
+                            destinationContext.canvas.height = newHeight;
+                            destinationContext.drawImage(sourceCanvas, 0, 0, newWidth, newHeight);
 
                             canvas.remove();
                             chartWrap.prepend(destination);
