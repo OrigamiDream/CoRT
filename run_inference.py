@@ -299,7 +299,7 @@ def perform_interactive_predictions(config: Config, runner: ModelRunner):
             break
 
         orig = sentence
-        sentence = normalize_texts(sentence)
+        sentence = normalize_texts(sentence, remove_specials=False, remove_last_period=False)
         sentence = sentence.lower()
 
         tokenized = tokenizer([sentence],

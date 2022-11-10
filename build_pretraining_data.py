@@ -14,7 +14,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 def preprocess_sentences_on_batch(batch):
     sentences = []
     for sentence in batch:
-        sentence = normalize_texts(sentence)
+        sentence = normalize_texts(sentence, remove_specials=False, remove_last_period=False)
         sentence = sentence.lower()  # do_lower_case
         sentences.append(sentence)
     return sentences

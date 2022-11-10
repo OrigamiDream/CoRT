@@ -53,7 +53,7 @@ def compose_correlation_to_tokens(correlations, tokens, sentence):
 def request_prediction(sentence, tokenizer, channel, args):
     orig = sentence
     # normalize texts
-    sentence = normalize_texts(sentence)
+    sentence = normalize_texts(sentence, remove_specials=False, remove_last_period=False)
     sentence = sentence.lower()
 
     # tokenize texts
