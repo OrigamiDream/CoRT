@@ -208,8 +208,10 @@ class CortForElaboratedSequenceClassification(models.Model):
             )
         else:
             raise ValueError('Invalid representation classifier: {}'.format(self.config.repr_classifier))
-        self.loss_fn = losses.SparseCategoricalCrossentropy(
-            from_logits=True, reduction=losses.Reduction.NONE
+        self.loss_fn = losses.CategoricalCrossentropy(
+            from_logits=True,
+            label_smoothing=self.config.label_smoothing,
+            reduction=losses.Reduction.NONE
         )
         self.dummy_inputs = (
             # input_ids
@@ -279,9 +281,9 @@ class CortForElaboratedSequenceClassification(models.Model):
         # Compute Losses
         total_loss = None
         section_co_loss, section_cce_loss = self.compute_losses(
-            section_representation, section_logits, sections, section_cw
+            section_representation, section_logits, section_ohe_labels, section_cw
         )
-        co_loss, cce_loss = self.compute_losses(representation, logits, labels, label_cw)
+        co_loss, cce_loss = self.compute_losses(representation, logits, ohe_labels, label_cw)
         cort_outputs.update({
             'section_co_loss': section_co_loss,
             'section_cce_loss': section_cce_loss,
@@ -314,8 +316,10 @@ class CortForSequenceClassification(models.Model):
             self.classifier = CortBidirectionalClassificationHead(config, num_labels=num_labels, name='classifier')
         else:
             raise ValueError('Invalid representation classifier: {}'.format(self.config.repr_classifier))
-        self.loss_fn = losses.SparseCategoricalCrossentropy(
-            from_logits=True, reduction=losses.Reduction.NONE
+        self.loss_fn = losses.CategoricalCrossentropy(
+            from_logits=True,
+            label_smoothing=self.config.label_smoothing,
+            reduction=losses.Reduction.NONE
         )
         self.dummy_inputs = (
             # input_ids
@@ -351,7 +355,7 @@ class CortForSequenceClassification(models.Model):
         }
 
         # Compute Losses
-        cce_loss = None if labels is None else self.loss_fn(labels, logits, sample_weight=cw)
+        cce_loss = None if labels is None else self.loss_fn(ohe_labels, logits, sample_weight=cw)
 
         total_loss = cce_loss
         if self.config.repr_finetune and (labels is not None or sections is not None):

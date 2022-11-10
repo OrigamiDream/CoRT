@@ -68,6 +68,7 @@ class Config:
         # Size of dense representation layer for Contrastive Representation Learning
         self.repr_size = kwargs.pop('repr_size', 1024)
         self.gradient_accumulation_steps = kwargs.pop('gradient_accumulation_steps', 1)
+        self.label_smoothing = kwargs.pop('label_smoothing', 0.0)
 
         # On Fine-tuning stage, whether to train the model from scratch or not.
         self.train_at_once = kwargs.pop('train_at_once', False)

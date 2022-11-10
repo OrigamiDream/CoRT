@@ -1,0 +1,46 @@
+program: run_finetuning.py
+project: CoRT Fine-tuning
+description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone (K-Fold)
+method: grid
+metric:
+  name: val_accuracy
+  goal: maximize
+parameters:
+  restore_checkpoint:
+    value: latest
+  pretraining_run_name:  # KorSci-BERT W&B run names
+    value: om3dm60l
+  batch_size:
+    value: 32
+  repr_size:
+    value: 1024
+  repr_classifier:
+    value: seq_cls
+  repr_act:
+    value: tanh
+  backbone_trainable_layers:
+    value: 0  # freeze all backbone model parameters
+  lr_fn:
+    value: polynomial_decay
+  warmup_rate:
+    value: 0
+  epochs:
+    value: 1
+  model_name:
+    value: korscibert
+  learning_rate:
+    value: 1e-6
+  weight_decay:
+    value: 0
+  concat_hidden_states:
+    value: 2
+  current_fold:
+    value: 0
+  label_smoothing:
+    values:
+      - 0.0
+      - 0.01
+      - 0.025
+      - 0.05
+      - 0.075
+      - 0.1
