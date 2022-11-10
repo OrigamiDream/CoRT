@@ -1,6 +1,6 @@
 program: run_finetuning.py
 project: CoRT Fine-tuning
-description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone (K-Fold)
+description: Grid Search for CoRT Fine-tuning Hyperparameters from Pre-trained backbone (Label Smoothing)
 method: grid
 metric:
   name: val_accuracy
