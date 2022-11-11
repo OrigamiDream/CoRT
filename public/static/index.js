@@ -231,11 +231,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         new bootstrap.Tooltip(resultButton);
 
-        resultButton.addEventListener('mouseenter', () => {
-            elements.wrap.classList.add('probs-shown');
-        });
-        resultButton.addEventListener('mouseout', () => {
-            elements.wrap.classList.remove('probs-shown');
+        resultButton.addEventListener('click', () => {
+            if(elements.wrap.classList.contains('probs-shown')) {
+                elements.wrap.classList.remove('probs-shown');
+            } else {
+                elements.wrap.classList.add('probs-shown');
+            }
         });
     }
 
@@ -248,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
         probWrap.append(canvas);
 
         const context = canvas.getContext('2d');
-        const gradient = context.createLinearGradient(0, 0, 0, 60);
+        const gradient = context.createLinearGradient(0, 0, 0, 70);
         gradient.addColorStop(0, '#629cff');
         gradient.addColorStop(1, '#ffffff');
         new Chart(context, {
@@ -261,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data: probs,
                     backgroundColor: gradient,
                     borderColor: '#629cff',
-                    borderRadius: 5,
+                    borderRadius: 7,
                     borderWidth: 3,
                     fill: true
                 }]
@@ -278,9 +279,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         display: false
                     },
                     datalabels: {
-                        align: 'end',
+                        borderRadius: 3,
+                        anchor: 'end',
+                        align: (context) => {
+                            const value = context.dataset.data[context.dataIndex];
+                            return value > 0.6 ? 'bottom' : 'top';
+                        },
                         color: 'rgb(33, 37, 41)',
-                        offset: 3,
+                        offset: 5,
                         padding: 0,
                         formatter: (value) => {
                             return value.toFixed(4);
@@ -291,6 +297,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     x: {
                         grid: {
                             display: false
+                        },
+                        ticks: {
+                            color: 'rgb(33, 37, 41)',
                         }
                     },
                     y: {
