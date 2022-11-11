@@ -30,7 +30,9 @@
 
 .card-query-body {
     display: inline-block;
+    overflow-y: hidden;
     overflow-x: scroll;
+    scrollbar-width: none;
     -ms-overflow-style: none;
     max-width: 100%;
     height: 100%;
@@ -44,7 +46,21 @@
 }
 
 .card-query-body::-webkit-scrollbar {
-    display: none;
+    height: 5px;
+}
+
+.card-query-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.card-query-body::-webkit-scrollbar-thumb {
+    background: lightgray;
+    border-radius: 2px;
+    transition: background 0.1s, height 0.1s;
+}
+
+.card-query-body::-webkit-scrollbar-thumb:hover {
+    background: gray;
 }
 
 .card-query-body span {
@@ -67,4 +83,5 @@
     width: 110px;
     height: 40px;
     cursor: default;
+    white-space: nowrap;
 }
