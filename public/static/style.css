@@ -46,7 +46,7 @@
 }
 
 .card-query-body::-webkit-scrollbar {
-    height: 5px;
+    height: 4px;
 }
 
 .card-query-body::-webkit-scrollbar-track {
