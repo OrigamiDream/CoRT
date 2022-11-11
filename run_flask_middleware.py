@@ -11,6 +11,10 @@ from tensorflow_serving.apis.prediction_service_pb2_grpc import PredictionServic
 from tensorflow_serving.apis.predict_pb2 import PredictRequest
 
 
+DISALLOWED_TOKENS = ['<unk>', '<s>', '</s>', '[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]']
+DISALLOWED_TOKENS += ['[unused{}]'.format(i + 1) for i in range(200)]
+
+
 def compose_correlation_to_tokens(correlations, tokens, sentence):
     offset = 0
     maxlen = len(sentence)
@@ -47,6 +51,8 @@ def compose_correlation_to_tokens(correlations, tokens, sentence):
                     'score': 0.0
                 })
                 offset += len(word)
+                if token in DISALLOWED_TOKENS:
+                    break
     return composed_tokens
 
 
