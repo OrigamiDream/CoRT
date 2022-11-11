@@ -7,3 +7,9 @@
 !./cort/pretrained/korscielectra/model/tokenization.py
 
 *.md
+./sweeps
+./wandb
+./eval-outputs
+./finetuning-checkpoints
+./pretraining-checkpoints
+./data
