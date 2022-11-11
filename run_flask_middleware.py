@@ -6,57 +6,12 @@ import tensorflow as tf
 
 from utils import utils
 from flask import Flask, request, jsonify, redirect, render_template
-from cort.preprocessing import normalize_texts
+from cort.preprocessing import normalize_texts, REMOVABLE_SPECIAL_CHAR_REPLACEMENTS, SPECIAL_CHAR_REPLACEMENTS
 from tensorflow_serving.apis.prediction_service_pb2_grpc import PredictionServiceStub
 from tensorflow_serving.apis.predict_pb2 import PredictRequest
 
 
-DISALLOWED_TOKENS = ['<unk>', '<s>', '</s>', '[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]']
-DISALLOWED_TOKENS += ['[unused{}]'.format(i + 1) for i in range(200)]
-
-
-def compose_correlation_to_tokens(correlations, tokens, sentence):
-    offset = 0
-    maxlen = len(sentence)
-    composed_tokens = []
-    for i, token in enumerate(tokens):
-        is_last_token = i == len(tokens) - 1
-        while offset < len(sentence):
-            matched = True
-            if token.startswith('##'):
-                matched = sentence[offset - 1] != ' '
-                token = token[2:]
-
-            word = sentence[offset:] if is_last_token else sentence[offset:offset + min(len(token), maxlen)]
-            matched = matched and token == word.lower()
-
-            if matched:
-                score = correlations[i]
-                composed_tokens.append({
-                    'matched': True,
-                    'text': word,
-                    'token': token,
-                    'token_index': i,
-                    'score': float(score)
-                })
-                offset += len(token)
-                break
-            else:
-                word = sentence[offset:] if is_last_token else sentence[offset]
-                composed_tokens.append({
-                    'matched': False,
-                    'text': word,
-                    'token': None,
-                    'token_index': -1,
-                    'score': 0.0
-                })
-                offset += len(word)
-                if token in DISALLOWED_TOKENS:
-                    break
-    return composed_tokens
-
-
-def request_prediction(sentence, tokenizer, channel, args):
+def request_prediction(sentence, tokenizer, replacements, channel, args):
     orig = sentence
     # normalize texts
     sentence = normalize_texts(sentence, remove_specials=False, remove_last_period=False)
@@ -90,7 +45,7 @@ def request_prediction(sentence, tokenizer, channel, args):
     correlations = (correlations - np.min(correlations)) / (np.max(correlations) - np.min(correlations))  # normalize
 
     # compose correlation vector to tokens for graphs
-    composed_tokens = compose_correlation_to_tokens(correlations, tokens, orig)
+    composed_tokens = utils.compose_correlation_to_tokens(correlations, tokens, orig, replacements)
     prediction = int(np.argmax(probs[0]))
     prediction_prob = float(probs[0][prediction])
     probs = [float(prob) for prob in probs[0]]
@@ -130,6 +85,9 @@ def main():
     if hasattr(tokenizer, 'disable_progressbar'):  # disable tqdm on korscibert tokenizer
         tokenizer.disable_progressbar = True
 
+    replacements = REMOVABLE_SPECIAL_CHAR_REPLACEMENTS + SPECIAL_CHAR_REPLACEMENTS
+    replacements = [(before, tokenizer.tokenize(after)) for before, after in replacements]
+
     channel = grpc.insecure_channel(args.grpc_server)
     app = Flask(__name__,
                 static_url_path='/static',
@@ -154,7 +112,7 @@ def main():
     def predict():
         body = request.get_json()
         try:
-            outputs = request_prediction(body['sentence'], tokenizer, channel, args)
+            outputs = request_prediction(body['sentence'], tokenizer, replacements, channel, args)
         except grpc.RpcError as e:
             logging.error(e)
             return jsonify({

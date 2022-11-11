@@ -12,6 +12,10 @@ from cort.pretrained import migrator, tokenization
 from transformers import AutoConfig, AutoTokenizer
 
 
+DISALLOWED_TOKENS = ['<unk>', '<s>', '</s>', '[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]']
+DISALLOWED_TOKENS += ['[unused{}]'.format(i + 1) for i in range(200)]
+
+
 @contextlib.contextmanager
 def empty_context_manager():
     yield None
@@ -100,3 +104,67 @@ def parse_arguments():
     config = Config(**vars(args))
     config.pretrained_config = parse_pretrained_config(config)
     return config
+
+
+def compose_correlation_to_tokens(correlations, tokens, sentence, replacements):
+    def _matches_candidates(index, matching_word):
+        for original, replaced_tokens in replacements:
+            query_tokens = tokens[index:min(index + len(replaced_tokens), len(tokens))]
+            all_matched = all(a == b for a, b in zip(query_tokens, replaced_tokens))
+            length = min(len(matching_word), len(original))
+            if all_matched and matching_word.lower()[:length] == original.lower()[:length]:
+                return True, (len(original), len(replaced_tokens))
+        return False, (None, None)
+
+    offset = 0
+    skips = 0
+    maxlen = len(sentence)
+    composed_tokens = []
+    for i, token in enumerate(tokens):
+        if skips > 0:
+            skips -= 1
+            continue
+
+        is_last_token = i == len(tokens) - 1
+        while offset < len(sentence):
+            matched = True
+            if token.startswith('##'):
+                matched = sentence[offset - 1] != ' '
+                token = token[2:]
+
+            word = sentence[offset:] if is_last_token else sentence[offset:min(offset + len(token), maxlen)]
+            candidate_matched, (candidate_size, token_offset) = _matches_candidates(i, word)
+            matched = matched and (token == word.lower() or candidate_matched)
+            if candidate_matched:
+                word = word[:candidate_size]
+                skips += token_offset - 1
+                matched_tokens = tokens[i:i + token_offset]
+                matched_token_indices = list(range(i, i + token_offset))
+            else:
+                matched_tokens = [token]
+                matched_token_indices = [i]
+
+            if matched:
+                score = correlations[i]
+                composed_tokens.append({
+                    'matched': True,
+                    'text': word,
+                    'tokens': matched_tokens,
+                    'token_indices': matched_token_indices,
+                    'score': float(score)
+                })
+                offset += len(word)
+                break
+            else:
+                word = sentence[offset:] if is_last_token else sentence[offset]
+                composed_tokens.append({
+                    'matched': False,
+                    'text': word,
+                    'tokens': [],
+                    'token_indices': [],
+                    'score': 0.0
+                })
+                offset += len(word)
+                if token in DISALLOWED_TOKENS:
+                    break
+    return composed_tokens

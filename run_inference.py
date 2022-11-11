@@ -4,7 +4,6 @@ import json
 import grpc
 import logging
 import argparse
-import collections
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -12,6 +11,7 @@ import tensorflow as tf
 from rich.console import Console
 from cort.config import Config
 from cort.modeling import CortForSequenceClassification
+from cort.preprocessing import REMOVABLE_SPECIAL_CHAR_REPLACEMENTS, SPECIAL_CHAR_REPLACEMENTS
 from utils import utils, formatting_utils
 from tensorflow.keras import metrics
 from tensorflow.keras.utils import Progbar
@@ -140,24 +140,7 @@ def eval_one_step(model, inputs):
     return model(inputs, training=False)
 
 
-def calc_correlation_from_attentions(input_ids, attentions, tokenizer):
-    length = np.sum(input_ids != tokenizer.pad_token_id)
-
-    attention_maps = []
-    for attention in attentions:
-        reduced = tf.reduce_mean(attention, axis=1)
-        reduced = reduced[:, :length - 1, :length - 1]
-        attention_maps.append(reduced)
-
-    reduced_attention = tf.concat(attention_maps, axis=0)
-    reduced_attention = tf.reduce_mean(reduced_attention, axis=0)
-
-    correlation = reduced_attention[0, 1:]
-    correlation = (correlation - tf.reduce_min(correlation)) / (tf.reduce_max(correlation) - tf.reduce_min(correlation))
-    return correlation.numpy()
-
-
-def compose_tokens_correlations(sentence, input_ids, correlations, tokenizer):
+def colorize_composed_tokens(composed_tokens):
     def build_score_unicodes(word_slice, score_index):
         unicodes = []
         for char in word_slice:
@@ -168,69 +151,21 @@ def compose_tokens_correlations(sentence, input_ids, correlations, tokenizer):
                 unicodes.append(unicode)
         return ''.join(unicodes)
 
-    def colorize(text, attention_score, c1=(150, 0, 0), c2=(0, 150, 0)):
+    def colorize(string, attention_score, c1=(150, 0, 0), c2=(0, 150, 0)):
         color = (1 - attention_score) * np.array(list(c1)) + attention_score * np.array(list(c2))
-        return '[rgb({},{},{})]{}[reset]'.format(int(color[0]), int(color[1]), int(color[2]), text)
+        return '[rgb({},{},{})]{}[reset]'.format(int(color[0]), int(color[1]), int(color[2]), string)
 
-    ComposedToken = collections.namedtuple('ComposedToken', [
-        'matched', 'text', 'colorized_text',
-        'token', 'token_index',
-        'correlation_score', 'correlation_unicode', 'colorized_correlation_unicode'
-    ])
-
-    length = np.sum(input_ids != tokenizer.pad_token_id)
-    tokens = tokenizer.convert_ids_to_tokens(input_ids[0, 1:length - 1])  # remove [CLS], [SEP], [PAD]
-
-    correlations = correlations[0, 1:length - 1]  # exclude [CLS], [SEP], [PAD]
-    correlations = (correlations - np.min(correlations)) / (np.max(correlations) - np.min(correlations))  # normalize
-
-    offset = 0
-    maxlen = len(sentence)
-    composed_tokens = []
-    for i, token in enumerate(tokens):
-        is_last_token = i == len(tokens) - 1
-        while offset < len(sentence):
-            matched = True
-            if token.startswith('##'):
-                matched = sentence[offset - 1] != ' '  # previous letter must not be space
-                token = token[2:]
-
-            if is_last_token:
-                word = sentence[offset:]
-            else:
-                word = sentence[offset:offset + min(len(token), maxlen)]
-            matched = matched and token == word.lower()
-
-            if matched:
-                offset += len(token)
-                score = correlations[i]
-                unicode_index = int(score * (len(CORRELATION_SCORE_UNICODES) - 1))
-                unicode_text = build_score_unicodes(word, unicode_index)
-                composed_tokens.append(ComposedToken(
-                    matched=True,
-                    text=word,
-                    colorized_text=colorize(word, score),
-                    token=token,
-                    token_index=i,
-                    correlation_score=score,
-                    correlation_unicode=unicode_text,
-                    colorized_correlation_unicode=colorize(unicode_text, score)
-                ))
-                break
-            else:
-                word = sentence[offset:] if is_last_token else sentence[offset]
-                composed_tokens.append(ComposedToken(
-                    matched=False,
-                    text=word,
-                    colorized_text=colorize(word, 0),
-                    token=None,
-                    token_index=-1,
-                    correlation_score=-1,
-                    correlation_unicode=' ',
-                    colorized_correlation_unicode=' '
-                ))
-                offset += len(word)
-    return composed_tokens
+    colorized = []
+    for composed_token in composed_tokens:
+        text = composed_token['text']
+        score = composed_token['score']
+        unicode_index = int(score * (len(CORRELATION_SCORE_UNICODES) - 1))
+        unicode_text = build_score_unicodes(text, unicode_index)
+        colorized.append({
+            'text': colorize(text, score),
+            'score': colorize(unicode_text, score)
+        })
+    return colorized
 
 
 def create_scatter_representation_table(representations, labels):
@@ -292,6 +227,9 @@ def perform_interactive_predictions(config: Config, runner: ModelRunner):
     if hasattr(tokenizer, 'disable_progressbar'):
         tokenizer.disable_progressbar = True
 
+    replacements = REMOVABLE_SPECIAL_CHAR_REPLACEMENTS + SPECIAL_CHAR_REPLACEMENTS
+    replacements = [(before, tokenizer.tokenize(after)) for before, after in replacements]
+
     print('You can perform inference interactively here, `q` to end the process')
     while True:
         sentence = input('\nSentence: ')
@@ -309,13 +247,20 @@ def perform_interactive_predictions(config: Config, runner: ModelRunner):
                               return_token_type_ids=False)
         input_ids = np.array(tokenized['input_ids'], dtype=np.int32)
         probs, correlations = runner.call(input_ids, tokenizer)
-        composed_tokens = compose_tokens_correlations(orig, input_ids, correlations, tokenizer)
+
+        sequence_length = np.sum(input_ids != tokenizer.pad_token_id)
+        tokens = tokenizer.convert_ids_to_tokens(input_ids[0, 1:sequence_length - 1])  # remove [CLS], [SEP], [PAD]
+        correlations = correlations[0, 1:sequence_length - 1]
+        correlations = (correlations - np.min(correlations)) / (np.max(correlations) - np.min(correlations))
+
+        composed_tokens = utils.compose_correlation_to_tokens(correlations, tokens, orig, replacements)
+        composed_tokens = colorize_composed_tokens(composed_tokens)
 
         probs = probs[0]
         index = np.argmax(probs)
         print('\nCorrelations:')
-        console.print(''.join([composed.colorized_correlation_unicode for composed in composed_tokens]))
-        console.print(''.join([composed.colorized_text for composed in composed_tokens]))
+        console.print(''.join([composed['score'] for composed in composed_tokens]))
+        console.print(''.join([composed['text'] for composed in composed_tokens]))
         print('\nPrediction: {}: ({:.06f} of confidence score)'.format(LABEL_NAMES[index], probs[index]))
         print()
 
