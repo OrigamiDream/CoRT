@@ -86,10 +86,11 @@ All prerequisites must be up-to-date.
 W&B is always required to run pre-training and fine-tuning scripts.
 Requiring to use Python 3.8 or above and CUDA 11.4 or above.
 
-Install following main packages by manually, or use `requirements.txt`
+Install following main packages by manually, or use `requirements.txt`. You must install Mecab on your system prior to install Python packages. Visit official [KoNLPy documentation](https://konlpy.org/en/latest/install/) for the installation guide.
 ```bash
 - tensorflow
 - tensorflow_addons
+- tensorflow-serving-api
 - torch
 - transformers
 - scikit-learn
