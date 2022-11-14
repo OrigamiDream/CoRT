@@ -170,6 +170,8 @@ def main():
                 logging.info('Froze CoRT encoder layers')
 
         checkpoint_id = wandb.run.id if wandb.run.id is not None else random_id
+        logging.info('Generated random ID is `{}`'.format(checkpoint_id))
+
         checkpoint_dir = os.path.join('./finetuning-checkpoints', checkpoint_id)
         checkpoint = tf.train.Checkpoint(model=model)
         manager = tf.train.CheckpointManager(checkpoint, checkpoint_dir, max_to_keep=config.keep_checkpoint_max)

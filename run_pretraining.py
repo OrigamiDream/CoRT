@@ -103,6 +103,8 @@ def main():
         val_metric = metrics.Mean(name='val_loss')
 
         checkpoint_id = wandb.run.id if wandb.run.id is not None else random_id
+        logging.info('Generated random ID is `{}`'.format(checkpoint_id))
+
         checkpoint_dir = os.path.join('./pretraining-checkpoints', checkpoint_id)
         checkpoint = tf.train.Checkpoint(step=tf.Variable(0), optimizer=optimizer, model=model)
         manager = tf.train.CheckpointManager(checkpoint, checkpoint_dir, max_to_keep=config.keep_checkpoint_max)
