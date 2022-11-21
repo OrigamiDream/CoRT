@@ -9,7 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
         '성능/효과', '후속연구'
     ]
 
+    let processing = false;
     presentation.addEventListener('click', () => {
+        if(processing) {
+            return;
+        }
         const sentences = [
             '본 연구는 전공계열에 따른 치과진료행태와 치과진료에 영향을 미치는 융합적 요인에 대하여 알아보고자 하였다.',
             '가설 1: 옴니채널브랜드 체험은 옴니채널브랜드 신뢰에 정(+)의 영향을 미칠 것이다.',
@@ -23,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ]
         function submit(index) {
             if(index > sentences.length - 1) {
+                processing = false;
                 return;
             }
             document.getElementById('sentence').value = sentences[index];
@@ -33,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 500);
             }, 500);
         }
+        processing = true;
         submit(0);
     });
 
