@@ -2,11 +2,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const sentence = document.getElementById('sentence');
     const submitButton = document.getElementById('submit');
     const predictions = document.getElementById('predictions');
+    const presentation = document.getElementById('presentation');
     const labelNames = [
         '문제 정의', '가설 설정', '기술 정의',
         '제안 방법', '대상 데이터', '데이터처리', '이론/모형',
         '성능/효과', '후속연구'
     ]
+
+    presentation.addEventListener('click', () => {
+        const sentences = [
+            '본 연구는 전공계열에 따른 치과진료행태와 치과진료에 영향을 미치는 융합적 요인에 대하여 알아보고자 하였다.',
+            '가설 1: 옴니채널브랜드 체험은 옴니채널브랜드 신뢰에 정(+)의 영향을 미칠 것이다.',
+            'RNN은 주로 자연어, 음성신호와 같은 연속적인 데이터를 분석할 때 활용되는 딥 러닝 기법이다.',
+            '본 논문에서는 코드 도용 방지를 위해서 메소드 생성 기법을 활용한 워터마킹을제안하였고 시스템을 구현하였다.',
+            '본 연구는 2018년 9월부터 12월 중순까지 임상치위생학실습과목에 참여하는 실습 대상자 즉, 실험 중재군33명과 Qraycam을 사용하여 구강보건교육을 실시하는 학생 33명을 연구대상으로 하였다.',
+            'ADHD, 우울 불안 및 자살 위험성의 상관관계는 pearson’s상관계수로, 자살위험성에 영향을 미치는 요인은 Logistic regression을 활용하였다.',
+            '본 연구에서는 다가구주택의 매매가격에 영향을 미치는 요인들에 대해 검증하고자 헤도닉가격모형을 활용하여 분석하였다.',
+            '본 연구의 창의적 교수법은 주로 강의식 수업의 이론교과목에 적용된 것으로, 기존에는 방대한 학습 내용 전달과 국가시험 과목이라는 부담으로 다양한 방법들을 적용하지는 못하였으나, 2학년과 3학년에서 비판적 사고력이 향상되었다.',
+            '차후 렌티큘러기법을 적용시킨 신호등이 도입될 경우 보행자의 무분별한 횡단을 막을 수 있고, 횡단보도 내에서 발생하는 인사사고를 감소시킬 수 있을 것이다.',
+        ]
+        function submit(index) {
+            if(index > sentences.length - 1) {
+                return;
+            }
+            document.getElementById('sentence').value = sentences[index];
+            setTimeout(() => {
+                document.getElementById('submit').click();
+                setTimeout(() => {
+                    submit(index + 1);
+                }, 500);
+            }, 500);
+        }
+        submit(0);
+    });
 
     function createCardElements(text) {
         const card = document.createElement('div');
