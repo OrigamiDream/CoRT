@@ -7,9 +7,9 @@ ENV MODEL_CONFIG=${MODEL_BASE_PATH}/models.config
 ENV MODEL_CONFIG_POLL_WAIT_SECONDS=60
 ENV BATCHING_CONFIG=${MODEL_BASE_PATH}/batching.config
 
-COPY conf/models.config ${MODEL_CONFIG}
-COPY conf/batching.config ${BATCHING_CONFIG}
-COPY $MODEL_DIR/$MODEL_NAME/ /models/cort
+COPY config/models.config ${MODEL_CONFIG}
+COPY config/batching.config ${BATCHING_CONFIG}
+COPY models/ ${MODEL_BASE_PATH}
 
 EXPOSE 8500
 
