@@ -12,6 +12,10 @@
     transform: translateY(-100%);
 }
 
+.card:last-child {
+    margin-bottom: 50px;
+}
+
 .card-query-row {
     position: relative;
     overflow: hidden;

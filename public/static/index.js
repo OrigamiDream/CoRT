@@ -353,12 +353,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const elements = createCardElements(value);
         predictions.prepend(elements.card);
         sentence.value = '';
+        attemptPredict(JSON.stringify({
+            'sentence': value
+        }), elements, 1);
+    }
 
+    function attemptPredict(body, elements, numAttempts, maxAttempts = 5) {
         fetch('/predict', {
             method: 'POST',
-            body: JSON.stringify({
-                'sentence': value
-            }),
+            body: body,
             headers: {
                 'Content-Type': 'application/json'
             }
@@ -382,17 +385,20 @@ document.addEventListener('DOMContentLoaded', () => {
             createAttentionChart(elements, composedTokens);
             createConfidenceChart(elements, probs);
         }).catch((error) => {
-            const failure = document.createElement('i');
-            failure.classList.add('bi', 'bi-exclamation-triangle');
+            if(numAttempts === maxAttempts) {
+                const failure = document.createElement('i');
+                failure.classList.add('bi', 'bi-exclamation-triangle');
 
-            const button = document.createElement('div');
-            button.classList.add('btn', 'btn-outline-danger');
-            button.append(failure);
+                const button = document.createElement('div');
+                button.classList.add('btn', 'btn-outline-danger');
+                button.append(failure);
 
-            elements.spinnerButton.remove();
-            elements.tag.append(button);
-
-            console.error(error);
+                elements.spinnerButton.remove();
+                elements.tag.append(button);
+                console.error(error);
+                return;
+            }
+            attemptPredict(body, numAttempts + 1, maxAttempts);
         });
     }
 
