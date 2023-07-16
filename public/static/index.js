@@ -398,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error(error);
                 return;
             }
-            attemptPredict(body, numAttempts + 1, maxAttempts);
+            attemptPredict(body, elements, numAttempts + 1, maxAttempts);
         });
     }
 
