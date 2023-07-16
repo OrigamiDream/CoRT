@@ -1,4 +1,4 @@
-FROM tensorflow/serving:2.8.2-gpu
+FROM emacski/tensorflow-serving:latest
 
 LABEL maintainer="hello@origamidream.me"
 
@@ -9,7 +9,7 @@ ENV BATCHING_CONFIG=${MODEL_BASE_PATH}/batching.config
 
 COPY conf/models.config ${MODEL_CONFIG}
 COPY conf/batching.config ${BATCHING_CONFIG}
-COPY $MODEL_DIR/$MODEL_NAME/ /models/cort
+COPY models/ ${MODEL_BASE_PATH}
 
 EXPOSE 8500
 
